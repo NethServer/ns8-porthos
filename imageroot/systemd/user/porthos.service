@@ -4,31 +4,31 @@
 #
 
 #
-# This systemd unit starts a kickstart instance using Podman.
+# This systemd unit starts a porthos instance using Podman.
 # Most parts of this file come from podman-generate-systemd.
 #
 [Unit]
-Description=kickstart server
+Description=porthos server
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
 EnvironmentFile=%S/state/environment
 WorkingDirectory=%S/state
 Restart=always
-ExecStartPre=/bin/rm -f %t/kickstart.pid %t/kickstart.ctr-id
+ExecStartPre=/bin/rm -f %t/porthos.pid %t/porthos.ctr-id
 ExecStartPre=-runagent discover-smarthost
 ExecStart=/usr/bin/podman run \
     --detach \
-    --conmon-pidfile=%t/kickstart.pid \
-    --cidfile=%t/kickstart.ctr-id \
+    --conmon-pidfile=%t/porthos.pid \
+    --cidfile=%t/porthos.ctr-id \
     --cgroups=no-conmon \
     --replace --name=%N \
     --publish=127.0.0.1:${TCP_PORT}:8080 \
     --env-file=smarthost.env \
     ${ECHO_SERVER_IMAGE}
-ExecStop=/usr/bin/podman stop --ignore --cidfile %t/kickstart.ctr-id -t 10
-ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/kickstart.ctr-id
-PIDFile=%t/kickstart.pid
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/porthos.ctr-id -t 10
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/porthos.ctr-id
+PIDFile=%t/porthos.pid
 Type=forking
 
 [Install]
