@@ -1,8 +1,0 @@
-{
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "get-configuration output",
-    "$id": "http://schema.nethserver.org/porthos/get-configuration-output.json",
-    "description": "Get porthos configuration",
-    "examples": [],
-    "type": "object"
-}

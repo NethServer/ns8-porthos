@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import sys
+import agent
+import os
+
+nginx_port, redis_port, _ = (os.environ['TCP_PORTS'] + ',').split(",", 1)
+
+agent.set_env("PORTHOS_NGINX_PORT", redis_port)
+agent.set_env("PORTHOS_REDIS_PORT", redis_port)
+agent.set_env("PORTHOS_SERVER_NAME", agent.get_hostname())

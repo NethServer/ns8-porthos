@@ -12,34 +12,67 @@ set -e
 images=()
 # The image will be pushed to GitHub container registry
 repobase="${REPOBASE:-ghcr.io/nethserver}"
+
+
+#
+# base for php fpm
+#
+reponame="porthos-fpm-base"
+container="porthos-fpm-container"
+# Prepare a local Ubuntu-based samba image
+if ! buildah inspect --type container "${container}" &>/dev/null; then
+    container=$(buildah from --name "${container}" docker.io/library/debian:12.2-slim)
+    buildah run "${container}" -- sh <<'EOF'
+set -e
+apt-get update
+apt-get -y install php-fpm php-redis vi
+apt-get clean
+mkdir -vp /srv/porthos/webroot
+chown -c -R www-data:www-data /srv/porthos/webroot
+ln -v -s /usr/sbin/php-fpm* /usr/local/sbin/php-fpm
+php --version
+echo $(php -m)
+php-fpm --version
+EOF
+    buildah commit "${container}" "${repobase}/${reponame}"
+fi
+
+#
+# php-fpm -- Using Debian for precompiled Redis extension
+#
+echo "Building the FPM image..."
+reponame="porthos-fpm"
+container=$(buildah from ${repobase}/porthos-fpm-base)
+buildah add "${container}" fpm /
+buildah config \
+    --workingdir=/srv/porthos/webroot \
+    --volume=/srv/porthos/webroot \
+    --entrypoint='["php-fpm", "-F", "-O", "-y", "/srv/porthos/etc/fpm.conf"]' \
+    --cmd='' \
+    "${container}"
+# Commit the image
+buildah commit "${container}" "${repobase}/${reponame}"
+
+# Append the image URL to the images array
+images+=("${repobase}/${reponame}")
+
+#
+# module image
+#
+echo "Building the module image..."
 # Configure the image name
 reponame="porthos"
 
 # Create a new empty container image
 container=$(buildah from scratch)
 
-# Reuse existing nodebuilder-porthos container, to speed up builds
-if ! buildah containers --format "{{.ContainerName}}" | grep -q nodebuilder-porthos; then
-    echo "Pulling NodeJS runtime..."
-    buildah from --name nodebuilder-porthos -v "${PWD}:/usr/src:Z" docker.io/library/node:lts
-fi
-
-echo "Build static UI files with node..."
-buildah run \
-    --workingdir=/usr/src/ui \
-    --env="NODE_OPTIONS=--openssl-legacy-provider" \
-    nodebuilder-porthos \
-    sh -c "yarn install && yarn build"
-
 # Add imageroot directory to the container image
 buildah add "${container}" imageroot /imageroot
-buildah add "${container}" ui/dist /ui
+buildah add "${container}" ui /ui
 # Setup the entrypoint, ask to reserve one TCP port with the label and set a rootless container
 buildah config --entrypoint=/ \
-    --label="org.nethserver.authorizations=traefik@node:routeadm" \
-    --label="org.nethserver.tcp-ports-demand=1" \
-    --label="org.nethserver.rootfull=0" \
-    --label="org.nethserver.images=docker.io/jmalloc/echo-server:latest" \
+    --label="org.nethserver.tcp-ports-demand=3" \
+    --label="org.nethserver.images=$(printf "%s:${IMAGETAG:-latest} " "${images[@]}") docker.io/library/nginx:1.25.3-alpine" \
     "${container}"
 # Commit the image
 buildah commit "${container}" "${repobase}/${reponame}"

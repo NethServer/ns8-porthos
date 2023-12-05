@@ -1,0 +1,35 @@
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# This systemd unit starts a fpm instance using Podman.
+# Most parts of this file come from podman-generate-systemd.
+#
+[Unit]
+Description=fpm server
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=%S/state/environment
+WorkingDirectory=%S/state
+Restart=always
+ExecStartPre=/bin/rm -f %t/fpm.pid %t/fpm.ctr-id
+ExecStart=/usr/bin/podman run \
+    --detach \
+    --conmon-pidfile=%t/fpm.pid \
+    --cidfile=%t/fpm.ctr-id \
+    --cgroups=no-conmon \
+    --replace --name=%N \
+    --volume=sockets:/srv/porthos/run:z \
+    --volume=webroot:/srv/porthos/webroot:z \
+    --env=PORTHOS_* \
+    ${PORTHOS_FPM_IMAGE}
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/fpm.ctr-id -t 10
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/fpm.ctr-id
+PIDFile=%t/fpm.pid
+Type=forking
+
+[Install]
+WantedBy=default.target
