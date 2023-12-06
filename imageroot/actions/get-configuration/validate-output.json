@@ -1,0 +1,28 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "get-configuration output",
+    "$id": "http://schema.nethserver.org/porthos/get-configuration-output.json",
+    "description": "Configure porthos",
+    "examples": [
+        {
+            "source": "rsync://mirror1.hs-esslingen.de",
+            "retention": 30,
+            "server_name": "updates.nethserver.org"
+        }
+    ],
+    "type": "object",
+    "properties": {
+        "source": {
+            "type": "string",
+            "description": "Official upstream rsync mirror base address"
+        },
+        "retention": {
+            "type": "integer",
+            "minimum": 1
+        },
+        "server_name": {
+            "type": "string",
+            "format": "idn-hostname"
+        }
+    }
+}

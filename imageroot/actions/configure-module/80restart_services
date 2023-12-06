@@ -1,0 +1,13 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+if [[ -z ${PORTHOS_FIRST_CONFIG} ]]; then
+    systemctl --user enable fpm.service nginx.service snapshot.timer
+    echo 'PORTHOS_FIRST_CONFIG=1' >> environment
+fi
+
+systemctl --user restart fpm.service nginx.service snapshot.timer

@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import sys
+import agent
+import os
+
+request = json.load(sys.stdin)
+
+config = {
+    'source': os.environ['PORTHOS_SOURCE'],
+    'retention': int(os.environ['PORTHOS_RETENTION']),
+    'server_name': os.environ['PORTHOS_SERVER_NAME'],
+}
+
+if 'source' in request:
+    agent.set_env("PORTHOS_SOURCE", request['source'])
+
+if 'retention' in request:
+    agent.set_env("PORTHOS_RETENTION", request['retention'])
+
+if 'server_name' in request:
+    agent.set_env("PORTHOS_SERVER_NAME", request['server_name'])
