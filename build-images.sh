@@ -25,7 +25,7 @@ if ! buildah inspect --type container "${container}" &>/dev/null; then
     buildah run "${container}" -- sh <<'EOF'
 set -e
 apt-get update
-apt-get -y install php-fpm php-redis vi
+apt-get -y install php-fpm php-redis
 apt-get clean
 mkdir -vp /srv/porthos/webroot
 chown -c -R www-data:www-data /srv/porthos/webroot
