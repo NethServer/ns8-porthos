@@ -1,0 +1,11 @@
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Scheduled Porthos snapshot procedure
+
+[Service]
+Type=oneshot
+ExecStart=runagent take-snapshot

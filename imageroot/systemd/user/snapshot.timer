@@ -1,0 +1,13 @@
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Timer of Porthos snapshot procedure
+
+[Timer]
+OnCalendar=Mon..Thu 23:00:00
+
+[Install]
+WantedBy=timers.target
