@@ -26,4 +26,4 @@ $repo_dir = $valid_repo_map[$repo][0];
 $version = $valid_repo_map[$repo][1];
 
 header('Content-type: text/plain; charset=UTF-8');
-echo "http://{$_SERVER['SERVER_NAME']}/rocky/{$version}/{$repo_dir}/{$arch}/os/\n";
+echo "https://{$_SERVER['SERVER_NAME']}/rocky/{$version}/{$repo_dir}/{$arch}/os/\n";

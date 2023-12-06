@@ -53,6 +53,9 @@ Change one or more attributes with a command like this:
 
     api-cli run module/porthos2/configure-module --data '{"retention":30}'
 
+To publish the repository, a HTTP host name route must be configured from
+the cluster-admin Settings page.
+
 ## Commands
 
 ### `take-snapshot`
