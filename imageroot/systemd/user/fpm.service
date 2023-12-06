@@ -12,6 +12,7 @@ Description=fpm server
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
+Environment=PORTHOS_FPM_PODMAN_ARGS=
 EnvironmentFile=%S/state/environment
 WorkingDirectory=%S/state
 Restart=always
@@ -25,7 +26,7 @@ ExecStart=/usr/bin/podman run \
     --volume=sockets:/srv/porthos/run:z \
     --volume=webroot:/srv/porthos/webroot:z \
     --env=PORTHOS_* \
-    ${PORTHOS_FPM_IMAGE}
+    $PORTHOS_FPM_PODMAN_ARGS ${PORTHOS_FPM_IMAGE}
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/fpm.ctr-id -t 10
 ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/fpm.ctr-id
 PIDFile=%t/fpm.pid
