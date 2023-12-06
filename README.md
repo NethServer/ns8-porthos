@@ -76,3 +76,24 @@ Print the status of relevant Systemd units:
 - `PORTHOS_RETENTION`, number of snapshots preserved under `/srv/porthos/webroot`
 - `PORTHOS_SOURCE`, base `rsync://` URL to a Rocky Linux official mirror
 - `PORTHOS_SERVER_NAME`, name of virtual HTTP server; by default the node FQDN is set
+
+## Containers
+
+### fpm (PHP-FPM)
+
+PHP scripts are installed under the `script/` directory. It is mounted in the
+`fpm` container for execution. Changes to the contents of the `script/`
+directory are immediately applied.
+
+To locally override the FPM configuration file, create and edit a
+`state/fpm.conf` file. Then, append to the `state/environment` file a line
+like this:
+
+    PORTHOS_FPM_PODMAN_ARGS=--volume=./fpm.conf:/srv/porthos/etc/fpm.conf:z
+
+### nginx
+
+The Nginx configuration is expanded from the template
+`templates/nginx.conf` at `nginx` container startup. A limited set of
+environment variables is substituted. Refer to Systemd `nginx.service`
+unit definition for the template implementation.

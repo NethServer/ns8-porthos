@@ -15,11 +15,10 @@ repobase="${REPOBASE:-ghcr.io/nethserver}"
 
 
 #
-# base for php fpm
+# base for php fpm, required for the Redis precompiled module
 #
 reponame="porthos-fpm-base"
 container="porthos-fpm-container"
-# Prepare a local Ubuntu-based samba image
 if ! buildah inspect --type container "${container}" &>/dev/null; then
     container=$(buildah from --name "${container}" docker.io/library/debian:12.2-slim)
     buildah run "${container}" -- sh <<'EOF'
@@ -45,7 +44,6 @@ reponame="porthos-fpm"
 container=$(buildah from ${repobase}/porthos-fpm-base)
 buildah add "${container}" fpm /
 buildah config \
-    --workingdir=/srv/porthos/webroot \
     --volume=/srv/porthos/webroot \
     --entrypoint='["php-fpm", "-F", "-O", "-y", "/srv/porthos/etc/fpm.conf"]' \
     --cmd='' \

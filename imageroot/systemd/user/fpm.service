@@ -23,6 +23,7 @@ ExecStart=/usr/bin/podman run \
     --cidfile=%t/fpm.ctr-id \
     --cgroups=no-conmon \
     --replace --name=%N \
+    --volume=%S/script:/srv/porthos/script:z \
     --volume=sockets:/srv/porthos/run:z \
     --volume=webroot:/srv/porthos/webroot:z \
     --env=PORTHOS_* \
