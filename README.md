@@ -19,8 +19,8 @@ For optimal performance, mount a filesystem with data deduplication or a
 LVM-VDO device. For example:
 
     dnf install lvm2 vdo vdo-support
-    vgcreate porthos /dev/sda
-    lvcreate --type vdo --name webroot --extents 8191 porthos
+    vgcreate porthos /dev/disk/by-id/scsi-porthos-volume
+    lvcreate --type vdo --name webroot --extents '100%FREE' porthos
     mkfs.xfs -K /dev/porthos/webroot
     mkdir -vp /srv/porthos/webroot
     mount /dev/porthos/webroot /srv/porthos/webroot
