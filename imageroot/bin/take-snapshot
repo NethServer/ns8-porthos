@@ -7,22 +7,33 @@
 
 set -e
 
+# shellcheck disable=SC1091
+source /etc/nethserver/core.env
 snapshot_retention=${PORTHOS_RETENTION:-45}
 snapshot_dir=tmp.$(date +d%Y%m%dt%H%I%S%2N)
 mirror_base_url=${PORTHOS_SOURCE:?}
 repo_path_list=(/rocky/9/BaseOS/x86_64/os/ /rocky/9/AppStream/x86_64/os/)
-rsync_opts=(-aqSH --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after)
+rsync_opts=(-aiSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after)
 
 cd /srv/porthos/webroot
 
 snapshot_list=(d20*)
 
-cp -a "${snapshot_list[-1]}" "${snapshot_dir}"
+if [[ ${#snapshot_list[@]} -gt 0 ]]; then
+    cp -a "${snapshot_list[-1]}" "${snapshot_dir}"
+fi
 trap 'rm -rf "${snapshot_dir}"' EXIT
 
 for repo_path in "${repo_path_list[@]}"; do
     printf "Synchronizing %s\n" "${mirror_base_url}${repo_path}"
-    rsync "${rsync_opts[@]}" "${mirror_base_url}${repo_path}" "${snapshot_dir}${repo_path}"
+    mkdir -vp "${snapshot_dir}${repo_path}"
+    time podman run \
+        --network=host --rm --replace --name=take-snapshot \
+        --volume=webroot:/srv/porthos/webroot \
+        --workdir=/srv/porthos/webroot \
+        "${RSYNC_IMAGE:?}" \
+        rsync "${rsync_opts[@]}" "${mirror_base_url}${repo_path}" "${snapshot_dir}${repo_path}"
+    printf "\n"
 done
 
 touch "${snapshot_dir}"
