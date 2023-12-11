@@ -13,7 +13,7 @@ $arch  = $_GET['arch'];
 
 $valid_repo_map = [
     'BaseOS-9' => ['BaseOS', $DISTRO_VERSION],
-    'AppStream-9' => ['AppStream' => $DISTRO_VERSION],
+    'AppStream-9' => ['AppStream', $DISTRO_VERSION],
 ];
 $valid_arch_list = ['x86_64'];
 
