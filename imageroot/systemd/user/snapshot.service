@@ -9,3 +9,4 @@ Description=Scheduled Porthos snapshot procedure
 [Service]
 Type=oneshot
 ExecStart=runagent take-snapshot
+SyslogIdentifier=%N
