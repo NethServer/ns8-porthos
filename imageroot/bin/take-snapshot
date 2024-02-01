@@ -15,7 +15,7 @@ snapshot_dir=tmp.$(date +d%Y%m%dt%H%I%S%2N)
 mirror_base_url=${PORTHOS_SOURCE:?}
 repo_path_list=(/rocky/9/BaseOS/x86_64/os/ /rocky/9/AppStream/x86_64/os/)
 rsync_opts=(-aiSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after)
-distfeed_url=https://raw.githubusercontent.com/NethServer/ns8-repomd/repomd/repodata.json
+distfeed_url=https://github.com/NethServer/ns8-repomd/archive/refs/heads/repomd.tar.gz
 
 cd /srv/porthos/webroot
 
@@ -28,7 +28,9 @@ trap 'rm -rf "${snapshot_dir}"' EXIT
 
 printf "Fetching distfeed from %s\n" "${distfeed_url}"
 mkdir -vp "${snapshot_dir}/distfeed"
-curl --fail -L -O --output-dir "${snapshot_dir}/distfeed" "${distfeed_url}"
+curl --fail -L -O --output-dir "${snapshot_dir}" "${distfeed_url}"
+tar -z -x --strip-components=1 -f "${snapshot_dir}/repomd.tar.gz" -C "${snapshot_dir}/distfeed"
+rm -f "${snapshot_dir}/repomd.tar.gz"
 
 for repo_path in "${repo_path_list[@]}"; do
     printf "Synchronizing %s\n" "${mirror_base_url}${repo_path}"
