@@ -64,7 +64,7 @@ function main() {
         // Authenticated clients gain access to older tiers
         while($snapshot != NULL) {
             $tier_id = system_tier($username);
-            if (snapshot_age($snapshot) > $tier_age[$tier_id]) {
+            if (snapshot_age($snapshot) >= $tier_age[$tier_id]) {
                 break;
             }
             $snapshot = array_pop($lsnapshots);
