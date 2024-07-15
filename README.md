@@ -74,34 +74,6 @@ Services are:
 - `fpm.service`
 - `nginx.service`
 
-## Commands
-
-### `take-snapshot`
-
-To create a snapshot manually run:
-
-    runagent -m porthos1 take-snapshot
-
-As alternative start the equivalent Systemd service:
-
-    runagent -m porthos1 systemctl --user start snapshot
-
-### `sync-head`
-
-To synchronize the copy of NS8 repodata with its upstream manually run:
-
-    runagent -m porthos1 sync-head
-
-As alternative start the equivalent Systemd service:
-
-    runagent -m porthos1 systemctl --user start sync-head
-
-### Inspect the services status
-
-Print the status of relevant Systemd units:
-
-    runagent -m porthos1 systemctl --user status fpm.service nginx.service snapshot.timer
-
 ## Environment variables
 
 - `PORTHOS_RETENTION`, number of snapshots preserved under `/srv/porthos/webroot`
@@ -139,3 +111,69 @@ net.core.wmem_max = 16482304
 net.core.rmem_max = 16482304
 net.ipv4.tcp_rmem = 4096 16384 16482304
 ```
+
+## Content policy
+
+Web clients can send an optional `X-Repo-View` header, with value `latest`
+or `managed`. Any other value is considered like `latest`, but this
+behavior may change in the future.
+
+Header codes:
+
+- `A` Authenticated
+- `U` Anonymous
+- `M` Managed repo view
+- `L` Latest repo view
+- `X` X-Repo-View header not sent
+
+Request types:
+
+- `df` request for distfeed (like `repodata.json`)
+- `rl` request for rockylinux mirror content
+
+Response types:
+
+- `L` content from latest snapshot (weekly updates)
+- `S` content from a managed snapshot (from previous weeks)
+- `H` content from distfeed head (updated multiple times per day)
+
+The following table summarizes the response for every headers/request
+combination.
+
+| headers/request | df | rl |
+|-----------------|----|----|
+| AX              | S  | S  |
+| AM              | S  | S  |
+| AL              | H  | L  |
+| UM              | H  | L  |
+| UL              | H  | L  |
+| UX              | L  | L  |
+
+
+## Commands
+
+### `take-snapshot`
+
+To create a snapshot manually run:
+
+    runagent -m porthos1 take-snapshot
+
+As alternative start the equivalent Systemd service:
+
+    runagent -m porthos1 systemctl --user start snapshot
+
+### `sync-head`
+
+To synchronize the copy of NS8 repodata with its upstream manually run:
+
+    runagent -m porthos1 sync-head
+
+As alternative start the equivalent Systemd service:
+
+    runagent -m porthos1 systemctl --user start sync-head
+
+### Inspect the services status
+
+Print the status of relevant Systemd units:
+
+    runagent -m porthos1 systemctl --user status fpm.service nginx.service snapshot.timer sync-head.timer
