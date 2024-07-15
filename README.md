@@ -100,3 +100,14 @@ The Nginx configuration is expanded from the template
 `templates/nginx.conf` at `nginx` container startup. A limited set of
 environment variables is substituted. Refer to Systemd `nginx.service`
 unit definition for the template implementation.
+
+## Tuning
+
+Increase kernel network throughput. Sysctl settings:
+
+```
+net.ipv4.tcp_mem = 42456 169824 679296
+net.core.wmem_max = 16482304
+net.core.rmem_max = 16482304
+net.ipv4.tcp_rmem = 4096 16384 16482304
+```
