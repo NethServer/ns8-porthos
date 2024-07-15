@@ -56,6 +56,24 @@ Change one or more attributes with a command like this:
 To publish the repository, a HTTP host name route must be configured from
 the cluster-admin Settings page.
 
+When the `configure-module` action is executed for the first time, service
+and timer units are enabled and started.
+
+Timers are:
+
+- `take-snapshot.timer` is a weekly job that update Rocky Linux repository
+  mirror contents and makes a copy of repodata.json and other metadata
+  from NS8 repositories.
+
+- `sync-head.timer` is a frequent job that 4 times per hour, from Monday to
+  Friday and during working hours, makes a copy of repodata.json and other
+  metadata from NS8 repositories.
+
+Services are:
+
+- `fpm.service`
+- `nginx.service`
+
 ## Commands
 
 ### `take-snapshot`
@@ -67,6 +85,16 @@ To create a snapshot manually run:
 As alternative start the equivalent Systemd service:
 
     runagent -m porthos1 systemctl --user start snapshot
+
+### `sync-head`
+
+To synchronize the copy of NS8 repodata with its upstream manually run:
+
+    runagent -m porthos1 sync-head
+
+As alternative start the equivalent Systemd service:
+
+    runagent -m porthos1 systemctl --user start sync-head
 
 ### Inspect the services status
 

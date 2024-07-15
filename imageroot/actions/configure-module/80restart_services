@@ -10,8 +10,8 @@ set -e
 exec 1>&2
 
 if [[ -z ${PORTHOS_FIRST_CONFIG} ]]; then
-    systemctl --user enable --now fpm.service nginx.service snapshot.timer
+    systemctl --user enable --now fpm.service nginx.service snapshot.timer sync-head.timer
     echo 'PORTHOS_FIRST_CONFIG=1' >> environment
 else
-    systemctl --user try-reload-or-restart fpm.service nginx.service snapshot.timer
+    systemctl --user try-reload-or-restart fpm.service nginx.service snapshot.timer sync-head.timer
 fi

@@ -1,0 +1,29 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+set -e
+shopt -s nullglob
+
+# shellcheck disable=SC1091
+source /etc/nethserver/core.env
+new_head=tmp.$(date +head.%Y%m%dt%H%I%S%2N)
+rsync_opts=(-aiSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after)
+distfeed_url=https://github.com/NethServer/ns8-repomd/archive/refs/heads/repomd.tar.gz
+
+cd /srv/porthos/webroot
+
+trap 'rm -rf remove."${new_head}" "${new_head}"' EXIT
+
+printf "Sync distfeed head from %s\n" "${distfeed_url}"
+mkdir -vp "${new_head}/distfeed" head
+curl --fail -L -O --output-dir "${new_head}" "${distfeed_url}"
+tar -z -x --strip-components=1 -f "${new_head}/repomd.tar.gz" -C "${new_head}/distfeed"
+rm -f "${new_head}/repomd.tar.gz"
+
+# Substitute the head directory with new_head
+mv head remove."${new_head}" || :
+mv -v "${new_head}" head || :

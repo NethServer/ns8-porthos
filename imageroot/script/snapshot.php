@@ -54,14 +54,15 @@ function main() {
         echo "Not found\n";
     }
 
+    $repo_view = isset($_SERVER['HTTP_X_REPO_VIEW']) ? $_SERVER['HTTP_X_REPO_VIEW'] : "latest";
     $username = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : "";
     $password = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : "";
 
     sort($lsnapshots);
 
-    $snapshot = array_pop($lsnapshots);
-    if($username && $password) {
-        // Authenticated clients gain access to older tiers
+    if($repo_view == "managed" && $username && $password) {
+        // Access to managed updates for authenticated clients.
+        $snapshot = array_pop($lsnapshots);
         while($snapshot != NULL) {
             $tier_id = system_tier($username);
             if (snapshot_age($snapshot) >= $tier_age[$tier_id]) {
@@ -69,6 +70,14 @@ function main() {
             }
             $snapshot = array_pop($lsnapshots);
         }
+    } else if (substr($_SERVER['DOCUMENT_URI'], 0, 10) == "/distfeed/") {
+        // Access to latest metadata (distfeed) if client is not
+        // authenticated, or if the request comes from the user through
+        // the Software Center APIs.
+        $snapshot = 'head';
+    } else {
+        // Access to latest DNF mirror contents.
+        $snapshot = array_pop($lsnapshots);
     }
 
     header('Cache-Control: private');
