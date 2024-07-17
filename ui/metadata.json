@@ -1,0 +1,22 @@
+{
+    "name": "Porthos",
+    "description": {
+        "en": "Managed distribution of NS8 software updates",
+        "it": "Distribuzione gestita degli aggiornamenti software di NS8"
+    },
+    "categories": [
+        "tools"
+    ],
+    "authors": [
+        {
+            "name": "Nethesis",
+            "email": "sviluppo@nethesis.it"
+        }
+    ],
+    "docs": {
+        "documentation_url": "https://github.com/NethServer/ns8-porthos/blob/main/README.md",
+        "bug_url": "https://github.com/NethServer/dev",
+        "code_url": "https://github.com/NethServer/ns8-porthos"
+    },
+    "source": "ghcr.io/nethserver/porthos"
+}
