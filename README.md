@@ -1,8 +1,9 @@
 # ns8-porthos
 
-Host Rocky Linux repository mirrors on Porthos
+Host Distfeed and Rocky Linux repository mirrors on Porthos
 
-This module provides a simple web stack for DNF repositories, based on Nginx + PHP-FPM
+This module provides a simple web stack to serve DNF repositories and NS8
+application Distfeed, based on Nginx + PHP-FPM.
 
 ## Install
 
@@ -112,7 +113,13 @@ net.core.rmem_max = 16482304
 net.ipv4.tcp_rmem = 4096 16384 16482304
 ```
 
-## Content policy
+## Content views
+
+Content views are designed for two different purposes. On one hand, a
+subscribed cluster wants to see the latest app updates from the Software
+Center page, which needs the Distfeed content. On the other hand the
+nightly cluster update procedure wants to install managed updates
+automatically for both the base Rocky Linux OS and NS8 applications.
 
 Web clients can send an optional `X-Repo-View` header, with value `latest`
 or `managed`. Any other value is considered like `latest`, but this
@@ -128,14 +135,15 @@ Header codes:
 
 Request types:
 
-- `df` request for distfeed (like `repodata.json`)
+- `df` request for Distfeed (like `repodata.json`)
 - `rl` request for rockylinux mirror content
 
 Response types:
 
-- `L` content from latest snapshot (weekly updates)
-- `S` content from a managed snapshot (from previous weeks)
-- `H` content from distfeed head (updated multiple times per day)
+- `L` content from the latest snapshot
+- `S` content from a managed (past) snapshot
+- `H` content from Distfeed head (updated multiple times per day from
+  Distfeed upstream)
 
 The following table summarizes the response for every headers/request
 combination.
@@ -149,8 +157,54 @@ combination.
 | UL              | H  | L  |
 | UX              | L  | L  |
 
+## Content schedule
+
+NS8 clients run automatic updates from Tuesday to Friday, at some random
+time between 00:00 and 06:00 (client local time). Clients are assigned to
+a content tier, based on a hash function of the credentials used for
+authentication. Tiers have different, increasing size. The smaller one
+receive updates before the larger one:
+
+- Tier 1, 10%. Age 3 days
+- Tier 2, 20%. Age 4 days
+- Tier 3, 70%. Age 5 days
+
+The tier Age defines how old a snapshot must be before being served by the
+`managed` view.
+
+The following table helps to understand the day of the week a snapshot is
+served (values), starting from the day of the week a snapshot was created
+(first column) and the client tier (first row). The table assumes a
+snapshot is not created during the night (from 12 to 6 AM).
+
+| -   | tier 1 | tier 2 | tier 3 |
+|:---:|--------|--------|--------|
+| FRI | Tue*   | Wed*   | Thu*   |
+| SAT | Wed*   | Thu*   | Fri*   |
+| SUN | Wed    | Thu    | Fri    |
+| MON | Fri    | Tue*   | Tue*   |
+| TUE | Tue*   | Tue*   | Tue*   |
+| WED | Tue*   | Tue*   | Tue*   |
+| THU | Tue*   | Tue*   | Wed*   |
+
+The asterisk in a value indicates a day of the next week. The
+`snapshot.timer` runs on Fridays at 21:00 UTC.
+
+The table shows that taking a snapshot on Tuesdays and Wednesdays
+flattenize the day of update for every tier, which may be undesired.
+
 
 ## Commands
+
+The Distfeed head is synchoronized by the `sync-head` command. It fetches
+Distfeed from its upstream on GitHub. A new snapshot of Rocky Linux and
+Distfeed is created with `take-snapshot`. The two commands are described in
+the next sections.
+
+The two commands are executed periodically by two Systemd timer units:
+`snapshot.timer` and `sync-head.timer`. They can be run manually at any
+time too, but refer to the Content policy and Content schedule sections to
+understand the implications.
 
 ### `take-snapshot`
 
@@ -162,9 +216,15 @@ As alternative start the equivalent Systemd service:
 
     runagent -m porthos1 systemctl --user start snapshot
 
+Each snapshot contains a copy of NS8 Distfeed data fetched from GitHub and
+an exact copy of Rocky Linux BaseOS and AppStream DNF repositories. To
+save disk space and performance, it is recommended to store the snapshots
+on a filesystem or block device that provides data deduplication.
+
 ### `sync-head`
 
-To synchronize the copy of NS8 repodata with its upstream manually run:
+To synchronize the copy of NS8 repodata with its GitHub upstream manually
+run:
 
     runagent -m porthos1 sync-head
 
