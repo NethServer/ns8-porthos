@@ -43,36 +43,76 @@ function snapshot_age($snapshot) {
     return $days_age;
 }
 
-function main() {
+function serve_from_latest_snapshot() {
+    $lsnapshots = array_map('basename', glob('/srv/porthos/webroot/d20*'));
+    if (count($lsnapshots) == 0) {
+        return 'not-found'; // Nginx will fail the file and return 404 for us
+    }
+    sort($lsnapshots);
+    $snapshot = array_pop($lsnapshots);
+    return $snapshot;
+}
+
+function serve_from_snapshots() {
+    $lsnapshots = array_map('basename', glob('/srv/porthos/webroot/d20*'));
+    if (count($lsnapshots) == 0) {
+        return 'not-found'; // Nginx will not find the file and return 404 for us
+    }
+    sort($lsnapshots);
+    $snapshot = array_pop($lsnapshots);
     // Minimum age (days) expected by tiers
     $tier_age = [3, 4, 5];
-
-    $lsnapshots = array_map('basename', glob('/srv/porthos/webroot/d20*'));
-
-    if (count($lsnapshots) == 0) {
-        http_response_code(404);
-        echo "Not found\n";
+    while($snapshot != NULL) {
+        $tier_id = system_tier($_SERVER['PHP_AUTH_USER']);
+        if (snapshot_age($snapshot) >= $tier_age[$tier_id]) {
+            break;
+        }
+        $snapshot = array_pop($lsnapshots);
     }
+    return $snapshot;
+}
 
+function main() {
+    $repo_view = isset($_SERVER['HTTP_X_REPO_VIEW']) ? $_SERVER['HTTP_X_REPO_VIEW'] : "unknown";
     $username = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : "";
     $password = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : "";
 
-    sort($lsnapshots);
+    $is_authenticated = ($username != "") && ($password != "");
+    $is_distfeed_request = substr($_SERVER['DOCUMENT_URI'], 0, 10) == "/distfeed/";
 
-    $snapshot = array_pop($lsnapshots);
-    if($username && $password) {
-        // Authenticated clients gain access to older tiers
-        while($snapshot != NULL) {
-            $tier_id = system_tier($username);
-            if (snapshot_age($snapshot) >= $tier_age[$tier_id]) {
-                break;
-            }
-            $snapshot = array_pop($lsnapshots);
+    //
+    // This is the enumeration if input => output cases
+    //
+    // AX, AM => SS
+    // UX => LL
+    // AL, UL, UM => HL
+    //
+    // Where A=Authenticated, U=Not authenticated,
+    //       X=no-view, M=managed view, L=latest view
+    //       SS=from snapshots, LL=from latest,
+    //       HL=distfeed from head, other content from latest
+    //
+
+    if($repo_view == "unknown") {
+        // Core <2.10 does not send the X-Repo-View header. We implement
+        // the initial update policy for backward compatibility.
+        if($is_authenticated) {
+            $prefix = serve_from_snapshots(); // AX => SS
+        } else {
+            $prefix = serve_from_latest_snapshot(); // UX => LL
         }
+    } else if($is_authenticated && $repo_view == "managed") {
+        // Automated nightly update job receive managed updates.
+        $prefix = serve_from_snapshots(); // AM => SS
+    } else if($is_distfeed_request) {
+        $prefix = 'head'; // AL, UL, UM => H.
+    } else {
+        // AL, UL, UM => .L
+        $prefix = serve_from_latest_snapshot();
     }
 
     header('Cache-Control: private');
-    header('X-Accel-Redirect: /' . $snapshot . $_SERVER['DOCUMENT_URI']);
+    header('X-Accel-Redirect: /' . $prefix . $_SERVER['DOCUMENT_URI']);
 }
 
 // Run

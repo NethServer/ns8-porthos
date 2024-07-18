@@ -5,9 +5,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-set -e
-
 exec 1>&2
 
 # Restart the service
-systemctl --user try-restart fpm.service nginx.service snapshot.timer
+systemctl --user try-restart fpm.service nginx.service snapshot.timer sync-head.timer

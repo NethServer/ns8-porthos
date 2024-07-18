@@ -1,0 +1,12 @@
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Scheduled Porthos sync-head procedure
+
+[Service]
+Type=oneshot
+ExecStart=runagent sync-head
+SyslogIdentifier=%N
