@@ -121,9 +121,9 @@ Center page, which needs the Distfeed content. On the other hand the
 nightly cluster update procedure wants to install managed updates
 automatically for both the base Rocky Linux OS and NS8 applications.
 
-Web clients can send an optional `X-Repo-View` header, with value `latest`
-or `managed`. Any other value is considered like `latest`, but this
-behavior may change in the future.
+Web clients can send an optional `view` querystring parameter, with value
+`latest` or `managed`. Any other value is considered like `latest`, but
+this behavior may change in the future.
 
 Header codes:
 
@@ -131,7 +131,7 @@ Header codes:
 - `U` Anonymous
 - `M` Managed repo view
 - `L` Latest repo view
-- `X` X-Repo-View header not sent
+- `X` querystring `view` parameter not present
 
 Request types:
 

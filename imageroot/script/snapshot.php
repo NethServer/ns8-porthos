@@ -73,7 +73,7 @@ function serve_from_snapshots() {
 }
 
 function main() {
-    $repo_view = isset($_SERVER['HTTP_X_REPO_VIEW']) ? $_SERVER['HTTP_X_REPO_VIEW'] : "unknown";
+    $repo_view = isset($_GET['view']) ? $_GET['view'] : "unknown";
     $username = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : "";
     $password = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : "";
 
@@ -94,8 +94,8 @@ function main() {
     //
 
     if($repo_view == "unknown") {
-        // Core <2.10 does not send the X-Repo-View header. We implement
-        // the initial update policy for backward compatibility.
+        // Core <2.10 does not send the querystring "view" parameter. We
+        // implement the initial update policy for backward compatibility.
         if($is_authenticated) {
             $prefix = serve_from_snapshots(); // AX => SS
         } else {
