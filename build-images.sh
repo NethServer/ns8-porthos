@@ -70,7 +70,7 @@ buildah add "${container}" ui /ui
 # Setup the entrypoint, ask to reserve one TCP port with the label and set a rootless container
 buildah config --entrypoint=/ \
     --label="org.nethserver.tcp-ports-demand=3" \
-    --label="org.nethserver.images=$(printf "%s:${IMAGETAG:-latest} " "${images[@]}") docker.io/library/nginx:1.28.0-alpine" \
+    --label="org.nethserver.images=$(printf "%s:${IMAGETAG:-latest} " "${images[@]}") docker.io/library/nginx:1.29.2-alpine" \
     "${container}"
 # Commit the image
 buildah commit "${container}" "${repobase}/${reponame}"
