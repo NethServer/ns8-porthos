@@ -20,7 +20,7 @@ repobase="${REPOBASE:-ghcr.io/nethserver}"
 reponame="porthos-fpm-base"
 container="porthos-fpm-container"
 if ! buildah inspect --type container "${container}" &>/dev/null; then
-    container=$(buildah from --name "${container}" docker.io/library/debian:12.2-slim)
+    container=$(buildah from --name "${container}" docker.io/library/debian:12.12-slim)
     buildah run "${container}" -- sh <<'EOF'
 set -e
 apt-get update
