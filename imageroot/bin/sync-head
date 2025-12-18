@@ -14,7 +14,12 @@ new_head=tmp.$(date +head.%Y%m%dt%H%I%S%2N)
 rsync_opts=(-aiSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after)
 distfeed_url=https://github.com/NethServer/ns8-repomd/archive/refs/heads/repomd.tar.gz
 
-cd /srv/porthos/webroot
+cd $(podman volume inspect webroot | jq -r '.[]
+    | if .Options.type == "bind" and (.Options.device? != null)
+      then .Options.device
+      else .Mountpoint
+      end'
+)
 
 trap 'rm -rf remove."${new_head}" "${new_head}"' EXIT
 

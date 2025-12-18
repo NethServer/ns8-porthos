@@ -25,7 +25,7 @@ ExecStart=/usr/bin/podman run \
     --replace --name=%N \
     --volume=%S/script:/srv/porthos/script:z \
     --volume=sockets:/srv/porthos/run:z \
-    --volume=webroot:/srv/porthos/webroot:z \
+    --volume=webroot:/srv/porthos/webroot \
     --env=PORTHOS_* \
     $PORTHOS_FPM_PODMAN_ARGS ${PORTHOS_FPM_IMAGE}
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/fpm.ctr-id -t 10

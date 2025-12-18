@@ -26,7 +26,7 @@ ExecStart=/usr/bin/podman run \
     --network=host \
     --volume=sockets:/srv/porthos/run:z \
     --volume=./nginx.conf:/etc/nginx/nginx.conf:z \
-    --volume=webroot:/srv/porthos/webroot:z \
+    --volume=webroot:/srv/porthos/webroot \
     --env=PORTHOS_* \
     ${NGINX_IMAGE}
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/nginx.ctr-id -t 10

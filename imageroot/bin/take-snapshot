@@ -17,7 +17,12 @@ repo_path_list=(/rocky/9/BaseOS/x86_64/os/ /rocky/9/AppStream/x86_64/os/)
 rsync_opts=(-aiSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after)
 distfeed_url=https://github.com/NethServer/ns8-repomd/archive/refs/heads/repomd.tar.gz
 
-cd /srv/porthos/webroot
+cd $(podman volume inspect webroot | jq -r '.[]
+    | if .Options.type == "bind" and (.Options.device? != null)
+      then .Options.device
+      else .Mountpoint
+      end'
+)
 
 snapshot_list=(d20*)
 
