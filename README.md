@@ -237,3 +237,25 @@ As alternative start the equivalent Systemd service:
 Print the status of relevant Systemd units:
 
     runagent -m porthos1 systemctl --user status fpm.service nginx.service snapshot.timer sync-head.timer
+
+
+## Testing
+
+Test the module using the `test-module.sh` script:
+
+    ./test-module.sh <NODE_ADDR> ghcr.io/nethserver/porthos:bug-7537
+
+Additional arguments are forwarded to the `robot` command (see [Robot
+Framework](https://robotframework.org/)).
+
+For instance, to speed up testing on a local machine:
+
+1. Skip the instance removal
+
+       ./test-module.sh 10.5.4.1 ghcr.io/nethserver/porthos:bug-7537 --exclude remove
+
+2. Continue to use the Porthos instance, skipping the installation steps.
+   The `--variable` option is required to find the existing Porthos
+   instance.
+
+       ./test-module.sh 10.5.4.1 ghcr.io/nethserver/porthos:bug-7537 --exclude createORremove --variable MID:porthos1
