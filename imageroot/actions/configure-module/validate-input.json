@@ -7,6 +7,7 @@
         {
             "source": "rsync://mirror1.hs-esslingen.de",
             "retention": 30,
+            "lets_encrypt": false,
             "server_name": "updates.nethserver.org"
         }
     ],
@@ -20,6 +21,11 @@
         "retention": {
             "type": "integer",
             "minimum": 1
+        },
+        "lets_encrypt": {
+            "description": "Obtain a valid LE certificate for server_name",
+            "type": "boolean",
+            "default": false
         },
         "server_name": {
             "type": "string",

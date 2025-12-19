@@ -26,3 +26,15 @@ if 'retention' in request:
 
 if 'server_name' in request:
     agent.set_env("PORTHOS_SERVER_NAME", request['server_name'])
+
+# Configure the service HTTP route:
+set_route_data = {
+    'instance': os.environ['MODULE_ID'],
+    'url':  'http://127.0.0.1:' + os.environ["PORTHOS_NGINX_PORT"],
+    'http2https': False,
+    'host': request.get('server_name', os.environ["PORTHOS_SERVER_NAME"]),
+}
+if 'lets_encrypt' in request:
+    set_route_data['lets_encrypt'] = request['lets_encrypt']
+    set_route_data['http2https'] = True
+agent.set_route(set_route_data)
