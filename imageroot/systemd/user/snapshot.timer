@@ -8,6 +8,7 @@ Description=Timer of Porthos snapshot procedure
 
 [Timer]
 OnCalendar=Fri 21:00:00 UTC
+RandomizedDelaySec=10min
 
 [Install]
 WantedBy=timers.target
