@@ -20,8 +20,8 @@ rsync_opts=(-aiSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o 
 distfeed_url=https://github.com/NethServer/ns8-repomd/archive/refs/heads/repomd.tar.gz
 
 # Run "$@", retrying on failure up to retry_max_attempts times with a
-# retry_delay pause in between. Useful to ride out transient network or
-# mirror-side errors without failing the whole snapshot run.
+# retry_delay pause in between. Used for the rsync mirror sync, which has
+# no built-in retry unlike curl (--retry).
 retry() {
     local attempt=1 rc=0
     while true; do
@@ -57,7 +57,9 @@ trap 'rm -rf "${snapshot_dir}"' EXIT
 
 printf "Fetching distfeed from %s\n" "${distfeed_url}"
 mkdir -vp "${snapshot_dir}/distfeed"
-retry curl --fail -L -O --output-dir "${snapshot_dir}" "${distfeed_url}"
+curl --fail -L -O --output-dir "${snapshot_dir}" \
+    --retry "$((retry_max_attempts - 1))" --retry-delay "${retry_delay}" --retry-all-errors \
+    "${distfeed_url}"
 tar -z -x --strip-components=1 -f "${snapshot_dir}/repomd.tar.gz" -C "${snapshot_dir}/distfeed"
 rm -f "${snapshot_dir}/repomd.tar.gz"
 
