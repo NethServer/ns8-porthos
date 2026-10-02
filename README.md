@@ -241,8 +241,13 @@ Print the status of relevant Systemd units:
 
 ## Testing
 
-Test the module using the `test-module.sh` script:
+The tests run in a QEMU virtual machine on the GitHub runner, through the
+shared [test-module-qemu.yml](https://github.com/NethServer/ns8-github-actions/blob/v1/docs/test-module-qemu.md)
+workflow. To run them against your own node, use the shared
+`test-module.sh` script:
 
+    curl -fsSLO https://raw.githubusercontent.com/NethServer/ns8-github-actions/v1/scripts/test-module.sh
+    chmod +x test-module.sh
     ./test-module.sh <NODE_ADDR> ghcr.io/nethserver/porthos:bug-7537
 
 Additional arguments are forwarded to the `robot` command (see [Robot
