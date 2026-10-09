@@ -15,5 +15,5 @@ jobs:
     steps:
       - uses: NethServer/ns8-github-actions/.github/actions/delete-image@v1
         with:
-          images: "dnsmasq dnsmasq-server"
+          images: "porthos porthos-fpm"
           delete_image_token: ${{ secrets.GITHUB_TOKEN }}
