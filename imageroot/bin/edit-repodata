@@ -1,0 +1,176 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# List snapshots and module versions, and remove module releases from
+# the repodata.json file of a snapshot. The first time the file is
+# modified, the original is kept as repodata.json.orig, next to it. Run
+# "edit-repodata help" for usage.
+#
+
+set -e
+shopt -s nullglob
+
+usage() {
+    cat <<EOT
+Usage:
+  ${0##*/} list-snapshots
+  ${0##*/} list [-s SNAPSHOT] MODULE
+  ${0##*/} remove [-s SNAPSHOT] MODULE VERSION [VERSION ...]
+  ${0##*/} diff [-s SNAPSHOT]
+  ${0##*/} restore [-s SNAPSHOT]
+  ${0##*/} help
+
+Verbs:
+  list-snapshots  List the snapshot names, oldest first. Snapshots with
+                  a modified repodata.json are marked as "edited".
+  list            List the versions of MODULE in repodata.json.
+                  Testing versions are marked as "testing".
+  remove          Remove the given VERSION(s) of MODULE from
+                  repodata.json. The first time the file is modified,
+                  the original is kept as repodata.json.orig.
+  diff            Print the differences between repodata.json.orig
+                  and repodata.json, both pretty-printed.
+  restore         Bring back the original repodata.json, undoing all
+                  the changes made by "remove".
+  help            Print this help message.
+
+MODULE is the module name used by repodata.json, e.g. "nethvoice".
+SNAPSHOT is a name printed by "list-snapshots"; it defaults to the
+latest one.
+EOT
+}
+
+usage_error() {
+    usage >&2
+    exit 2
+}
+
+verb="$1"
+shift || :
+snapshot=
+case "${verb}" in
+    help|-h|--help)
+        usage
+        exit 0
+        ;;
+    list-snapshots)
+        [[ $# -eq 0 ]] || usage_error
+        ;;
+    list|remove|diff|restore)
+        while getopts "s:" opt; do
+            case "${opt}" in
+                s) snapshot="${OPTARG%/}" ;;
+                *) usage_error ;;
+            esac
+        done
+        shift $((OPTIND - 1))
+        case "${verb}" in
+            list) [[ $# -eq 1 ]] || usage_error ;;
+            remove) [[ $# -ge 2 ]] || usage_error ;;
+            diff|restore) [[ $# -eq 0 ]] || usage_error ;;
+        esac
+        module="$1"
+        shift || :
+        versions=("$@")
+        ;;
+    *)
+        usage_error
+        ;;
+esac
+
+cd $(podman volume inspect webroot | jq -r '.[]
+    | if .Options.type == "bind" and (.Options.device? != null)
+      then .Options.device
+      else .Mountpoint
+      end'
+)
+
+snapshot_list=(d20*)
+
+if [[ "${verb}" == list-snapshots ]]; then
+    for name in "${snapshot_list[@]}"; do
+        if [[ -e "${name}/distfeed/repodata.json.orig" ]]; then
+            printf "%s edited\n" "${name}"
+        else
+            printf "%s\n" "${name}"
+        fi
+    done
+    exit 0
+fi
+
+if [[ -z "${snapshot}" ]]; then
+    if [[ ${#snapshot_list[@]} -eq 0 ]]; then
+        printf "No snapshot found\n" >&2
+        exit 1
+    fi
+    snapshot="${snapshot_list[-1]}"
+fi
+
+repodata="${snapshot}/distfeed/repodata.json"
+if [[ ! -f "${repodata}" ]]; then
+    printf "File not found: %s\n" "${repodata}" >&2
+    exit 1
+fi
+
+if [[ "${verb}" == diff || "${verb}" == restore ]] && [[ ! -e "${repodata}.orig" ]]; then
+    printf "Snapshot %s was not edited\n" "${snapshot}" >&2
+    exit 0
+fi
+
+if [[ "${verb}" == restore ]]; then
+    mv -fv "${repodata}.orig" "${repodata}"
+    exit 0
+fi
+
+if [[ "${verb}" == diff ]]; then
+    rc=0
+    diff -u --label "${repodata}.orig" --label "${repodata}" \
+        <(jq . "${repodata}.orig") <(jq . "${repodata}") || rc=$?
+    # diff exits 1 when the files differ: that is not an error here
+    [[ ${rc} -le 1 ]] || exit "${rc}"
+    exit 0
+fi
+
+if ! jq -e --arg id "${module}" 'any(.[]; .id == $id)' "${repodata}" >/dev/null; then
+    printf "Module %s not found in %s\n" "${module}" "${repodata}" >&2
+    exit 1
+fi
+
+if [[ "${verb}" == list ]]; then
+    jq -r --arg id "${module}" '.[] | select(.id == $id) | .versions[]
+        | if .testing then "\(.tag) testing" else .tag end' "${repodata}"
+    exit 0
+fi
+
+versions_json=$(printf '%s\n' "${versions[@]}" | jq -R . | jq -c -s .)
+
+missing=$(jq -r --arg id "${module}" --argjson tags "${versions_json}" '
+    ([.[] | select(.id == $id) | .versions[].tag]) as $have
+    | $tags - $have | .[]' "${repodata}")
+if [[ -n "${missing}" ]]; then
+    printf "Module %s version not found in %s: %s\n" "${module}" "${repodata}" "${missing//$'\n'/ }" >&2
+    exit 1
+fi
+
+if [[ ! -e "${repodata}.orig" ]]; then
+    cp -av "${repodata}" "${repodata}.orig"
+fi
+
+trap 'rm -f "${repodata}.tmp"' EXIT
+jq -c --arg id "${module}" --argjson tags "${versions_json}" '
+    map(if .id == $id
+        then .versions |= map(select(.tag as $t | $tags | index($t) | not))
+        else .
+        end)' "${repodata}" > "${repodata}.tmp"
+chmod --reference="${repodata}" "${repodata}.tmp"
+mv -f "${repodata}.tmp" "${repodata}"
+trap - EXIT
+
+printf "Removed %s version(s) from %s: %s\n" "${module}" "${repodata}" "${versions[*]}"
+printf "Remaining %s versions: %s\n" "${module}" \
+    "$(jq -r --arg id "${module}" '[.[] | select(.id == $id) | .versions[].tag] | join(" ")' "${repodata}")"

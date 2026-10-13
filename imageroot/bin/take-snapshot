@@ -56,6 +56,8 @@ fi
 trap 'rm -rf "${snapshot_dir}"' EXIT
 
 printf "Fetching distfeed from %s\n" "${distfeed_url}"
+# Start from an empty distfeed: drop stale files and edit-repodata backups
+rm -rf "${snapshot_dir}/distfeed"
 mkdir -vp "${snapshot_dir}/distfeed"
 curl --fail -L -O --output-dir "${snapshot_dir}" \
     --retry "$((retry_max_attempts - 1))" --retry-delay "${retry_delay}" --retry-all-errors \

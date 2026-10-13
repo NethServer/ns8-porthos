@@ -232,6 +232,40 @@ As alternative start the equivalent Systemd service:
 
     runagent -m porthos1 systemctl --user start sync-head
 
+### `edit-repodata`
+
+To withdraw a module release from the latest snapshot, for example
+NethVoice 1.7.10, run:
+
+    runagent -m porthos1 edit-repodata remove nethvoice 1.7.10
+
+Multiple versions can be listed after the module name. To print the
+versions of a module available in the snapshot run:
+
+    runagent -m porthos1 edit-repodata list nethvoice
+
+Use `-s SNAPSHOT` with `list` and `remove` to work on a snapshot other
+than the latest one. To print the snapshot names, oldest first, run:
+
+    runagent -m porthos1 edit-repodata list-snapshots
+
+Snapshots already modified are marked as `edited`. Run `edit-repodata
+help` for a summary of the command usage.
+
+The first time a snapshot's `repodata.json` is modified, the original file
+is kept as `repodata.json.orig` in the same directory. To review the
+changes, print the differences between the two files, pretty-printed
+with `jq`:
+
+    runagent -m porthos1 edit-repodata diff
+
+To undo all the changes and bring back the original file run:
+
+    runagent -m porthos1 edit-repodata restore
+
+The next `take-snapshot` run fetches a new copy of Distfeed, so the
+removed release appears again unless it is withdrawn upstream too.
+
 ### Inspect the services status
 
 Print the status of relevant Systemd units:
