@@ -6,10 +6,10 @@
 #
 
 #
-# List snapshots and module versions, and remove module releases from
-# the repodata.json file of a snapshot. The first time the file is
-# modified, the original is kept as repodata.json.orig, next to it. Run
-# "edit-repodata help" for usage.
+# List snapshots and module versions, remove module releases from the
+# repodata.json file of snapshots, or pick them from the Distfeed head.
+# The first time the file is modified, the original is kept as
+# repodata.json.orig, next to it. Run "edit-repodata help" for usage.
 #
 
 set -e
@@ -20,7 +20,8 @@ usage() {
 Usage:
   ${0##*/} list-snapshots
   ${0##*/} list [-s SNAPSHOT] MODULE
-  ${0##*/} remove [-s SNAPSHOT] MODULE VERSION [VERSION ...]
+  ${0##*/} remove [-s SNAPSHOT ...] MODULE VERSION [VERSION ...]
+  ${0##*/} pick [-s SNAPSHOT ...] MODULE VERSION [VERSION ...]
   ${0##*/} diff [-s SNAPSHOT]
   ${0##*/} restore [-s SNAPSHOT]
   ${0##*/} help
@@ -29,19 +30,26 @@ Verbs:
   list-snapshots  List the snapshot names, oldest first. Snapshots with
                   a modified repodata.json are marked as "edited".
   list            List the versions of MODULE in repodata.json.
-                  Testing versions are marked as "testing".
+                  Testing versions are marked as "testing". Versions
+                  found only in the Distfeed head are listed at the
+                  end, as "# VERSION in head only".
   remove          Remove the given VERSION(s) of MODULE from
                   repodata.json. The first time the file is modified,
                   the original is kept as repodata.json.orig.
+  pick            Copy the given VERSION(s) of MODULE from the Distfeed
+                  head into repodata.json, in the same position they
+                  have in the head. MODULE must already be in the
+                  snapshot. The original file is kept as with "remove".
   diff            Print the differences between repodata.json.orig
                   and repodata.json, both pretty-printed.
   restore         Bring back the original repodata.json, undoing all
-                  the changes made by "remove".
+                  the changes made by "remove" and "pick".
   help            Print this help message.
 
 MODULE is the module name used by repodata.json, e.g. "nethvoice".
 SNAPSHOT is a name printed by "list-snapshots"; it defaults to the
-latest one.
+latest one. With "remove" and "pick", -s can be repeated to change
+more snapshots at once: if any of them cannot be changed, none is.
 EOT
 }
 
@@ -50,9 +58,15 @@ usage_error() {
     exit 2
 }
 
+die() {
+    # shellcheck disable=SC2059
+    printf "$@" >&2
+    exit 1
+}
+
 verb="$1"
 shift || :
-snapshot=
+snapshots=()
 case "${verb}" in
     help|-h|--help)
         usage
@@ -61,18 +75,18 @@ case "${verb}" in
     list-snapshots)
         [[ $# -eq 0 ]] || usage_error
         ;;
-    list|remove|diff|restore)
+    list|remove|pick|diff|restore)
         while getopts "s:" opt; do
             case "${opt}" in
-                s) snapshot="${OPTARG%/}" ;;
+                s) snapshots+=("${OPTARG%/}") ;;
                 *) usage_error ;;
             esac
         done
         shift $((OPTIND - 1))
         case "${verb}" in
-            list) [[ $# -eq 1 ]] || usage_error ;;
-            remove) [[ $# -ge 2 ]] || usage_error ;;
-            diff|restore) [[ $# -eq 0 ]] || usage_error ;;
+            list) [[ $# -eq 1 && ${#snapshots[@]} -le 1 ]] || usage_error ;;
+            remove|pick) [[ $# -ge 2 ]] || usage_error ;;
+            diff|restore) [[ $# -eq 0 && ${#snapshots[@]} -le 1 ]] || usage_error ;;
         esac
         module="$1"
         shift || :
@@ -91,6 +105,7 @@ cd $(podman volume inspect webroot | jq -r '.[]
 )
 
 snapshot_list=(d20*)
+head_repodata=head/distfeed/repodata.json
 
 if [[ "${verb}" == list-snapshots ]]; then
     for name in "${snapshot_list[@]}"; do
@@ -103,19 +118,54 @@ if [[ "${verb}" == list-snapshots ]]; then
     exit 0
 fi
 
-if [[ -z "${snapshot}" ]]; then
+if [[ ${#snapshots[@]} -eq 0 ]]; then
     if [[ ${#snapshot_list[@]} -eq 0 ]]; then
-        printf "No snapshot found\n" >&2
-        exit 1
+        die "No snapshot found\n"
     fi
-    snapshot="${snapshot_list[-1]}"
+    snapshots=("${snapshot_list[-1]}")
 fi
 
+for snapshot in "${snapshots[@]}"; do
+    if [[ ! -f "${snapshot}/distfeed/repodata.json" ]]; then
+        die "File not found: %s\n" "${snapshot}/distfeed/repodata.json"
+    fi
+done
+
+# Print the tags of $module found in the repodata file $1, one per line
+module_tags() {
+    jq -r --arg id "${module}" '.[] | select(.id == $id) | .versions[].tag' "$1"
+}
+
+# Return success if $module is found in the repodata file $1
+has_module() {
+    jq -e --arg id "${module}" 'any(.[]; .id == $id)' "$1" >/dev/null
+}
+
+# Print the given versions that are (if $2 is "missing": are not) in
+# the repodata file $1, separated by spaces
+filter_versions() {
+    local have
+    have=$(module_tags "$1")
+    printf '%s\n' "${versions[@]}" | grep -Fx -f <(printf '%s\n' "${have}") ${2:+-v} | paste -s -d ' '
+}
+
+# Apply the jq filter $2 to the repodata file $1, and keep a copy of
+# the original file. Additional arguments are passed to jq.
+write_repodata() {
+    local repodata="$1" filter="$2"
+    shift 2
+    if [[ ! -e "${repodata}.orig" ]]; then
+        cp -av "${repodata}" "${repodata}.orig"
+    fi
+    trap 'rm -f "${repodata}.tmp"' EXIT
+    jq -c --arg id "${module}" --argjson tags "${versions_json}" "$@" "${filter}" "${repodata}" > "${repodata}.tmp"
+    chmod --reference="${repodata}" "${repodata}.tmp"
+    mv -f "${repodata}.tmp" "${repodata}"
+    trap - EXIT
+}
+
+snapshot="${snapshots[0]}"
 repodata="${snapshot}/distfeed/repodata.json"
-if [[ ! -f "${repodata}" ]]; then
-    printf "File not found: %s\n" "${repodata}" >&2
-    exit 1
-fi
 
 if [[ "${verb}" == diff || "${verb}" == restore ]] && [[ ! -e "${repodata}.orig" ]]; then
     printf "Snapshot %s was not edited\n" "${snapshot}" >&2
@@ -136,41 +186,84 @@ if [[ "${verb}" == diff ]]; then
     exit 0
 fi
 
-if ! jq -e --arg id "${module}" 'any(.[]; .id == $id)' "${repodata}" >/dev/null; then
-    printf "Module %s not found in %s\n" "${module}" "${repodata}" >&2
-    exit 1
-fi
-
 if [[ "${verb}" == list ]]; then
+    in_head=0
+    if [[ -f "${head_repodata}" ]] && has_module "${head_repodata}"; then
+        in_head=1
+    fi
+    if ! has_module "${repodata}" && [[ ${in_head} -eq 0 ]]; then
+        die "Module %s not found in %s\n" "${module}" "${repodata}"
+    fi
     jq -r --arg id "${module}" '.[] | select(.id == $id) | .versions[]
         | if .testing then "\(.tag) testing" else .tag end' "${repodata}"
+    if [[ ${in_head} -eq 1 ]]; then
+        jq -r --arg id "${module}" --slurpfile snap "${repodata}" '
+            [$snap[0][] | select(.id == $id) | .versions[].tag] as $have
+            | .[] | select(.id == $id) | .versions[]
+            | select(.tag | IN($have[]) | not)
+            | "# \(.tag)\(if .testing then " testing" else "" end) in head only"' "${head_repodata}"
+    fi
     exit 0
 fi
 
 versions_json=$(printf '%s\n' "${versions[@]}" | jq -R . | jq -c -s .)
 
-missing=$(jq -r --arg id "${module}" --argjson tags "${versions_json}" '
-    ([.[] | select(.id == $id) | .versions[].tag]) as $have
-    | $tags - $have | .[]' "${repodata}")
-if [[ -n "${missing}" ]]; then
-    printf "Module %s version not found in %s: %s\n" "${module}" "${repodata}" "${missing//$'\n'/ }" >&2
-    exit 1
+# Check every snapshot before changing any of them
+if [[ "${verb}" == pick ]]; then
+    if [[ ! -f "${head_repodata}" ]]; then
+        die "File not found: %s\n" "${head_repodata}"
+    fi
+    if ! has_module "${head_repodata}"; then
+        die "Module %s not found in %s\n" "${module}" "${head_repodata}"
+    fi
+    missing=$(filter_versions "${head_repodata}" missing)
+    if [[ -n "${missing}" ]]; then
+        die "Module %s version not found in %s: %s\n" "${module}" "${head_repodata}" "${missing}"
+    fi
 fi
+for snapshot in "${snapshots[@]}"; do
+    repodata="${snapshot}/distfeed/repodata.json"
+    if ! has_module "${repodata}"; then
+        die "Module %s not found in %s\n" "${module}" "${repodata}"
+    fi
+    if [[ "${verb}" == remove ]]; then
+        missing=$(filter_versions "${repodata}" missing)
+        if [[ -n "${missing}" ]]; then
+            die "Module %s version not found in %s: %s\n" "${module}" "${repodata}" "${missing}"
+        fi
+    else
+        present=$(filter_versions "${repodata}")
+        if [[ -n "${present}" ]]; then
+            die "Module %s version already in %s: %s\n" "${module}" "${repodata}" "${present}"
+        fi
+    fi
+done
 
-if [[ ! -e "${repodata}.orig" ]]; then
-    cp -av "${repodata}" "${repodata}.orig"
-fi
-
-trap 'rm -f "${repodata}.tmp"' EXIT
-jq -c --arg id "${module}" --argjson tags "${versions_json}" '
-    map(if .id == $id
-        then .versions |= map(select(.tag as $t | $tags | index($t) | not))
-        else .
-        end)' "${repodata}" > "${repodata}.tmp"
-chmod --reference="${repodata}" "${repodata}.tmp"
-mv -f "${repodata}.tmp" "${repodata}"
-trap - EXIT
-
-printf "Removed %s version(s) from %s: %s\n" "${module}" "${repodata}" "${versions[*]}"
-printf "Remaining %s versions: %s\n" "${module}" \
-    "$(jq -r --arg id "${module}" '[.[] | select(.id == $id) | .versions[].tag] | join(" ")' "${repodata}")"
+for snapshot in "${snapshots[@]}"; do
+    repodata="${snapshot}/distfeed/repodata.json"
+    if [[ "${verb}" == remove ]]; then
+        # shellcheck disable=SC2016
+        write_repodata "${repodata}" '
+            map(if .id == $id
+                then .versions |= map(select(.tag | IN($tags[]) | not))
+                else .
+                end)'
+        printf "Removed %s version(s) from %s: %s\n" "${module}" "${repodata}" "${versions[*]}"
+    else
+        # Insert each picked version before the first snapshot version
+        # that follows it in the head, or at the end if there is none
+        # shellcheck disable=SC2016
+        write_repodata "${repodata}" '
+            [$head[0][] | select(.id == $id) | .versions[]] as $hv
+            | [$hv[].tag] as $ho
+            | map(if .id == $id
+                then .versions |= reduce ($hv[] | select(.tag | IN($tags[]))) as $v (.;
+                    $ho[($ho | index($v.tag)) + 1:] as $after
+                    | (first(range(length) as $i | select(.[$i].tag | IN($after[])) | $i) // length) as $at
+                    | .[:$at] + [$v] + .[$at:])
+                else .
+                end)' --slurpfile head "${head_repodata}"
+        printf "Picked %s version(s) from %s into %s: %s\n" "${module}" "${head_repodata}" "${repodata}" "${versions[*]}"
+    fi
+    printf "Versions of %s now in %s: %s\n" "${module}" "${snapshot}" "$(module_tags "${repodata}" | paste -s -d ' ')"
+done

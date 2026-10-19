@@ -244,8 +244,20 @@ versions of a module available in the snapshot run:
 
     runagent -m porthos1 edit-repodata list nethvoice
 
-Use `-s SNAPSHOT` with `list` and `remove` to work on a snapshot other
-than the latest one. To print the snapshot names, oldest first, run:
+Versions found only in the Distfeed head (see `sync-head`) are listed at
+the end, like `# 1.8.0 in head only`. To copy one of them into the
+snapshot, for example to publish an urgent fix before the next snapshot
+is taken, run:
+
+    runagent -m porthos1 edit-repodata pick nethvoice 1.8.0
+
+The picked version gets the same position it has in the head. The module
+must already be in the snapshot.
+
+Use `-s SNAPSHOT` with `list`, `remove` and `pick` to work on a snapshot
+other than the latest one. With `remove` and `pick` the option can be
+repeated to change more snapshots at once: if any of them cannot be
+changed, none is. To print the snapshot names, oldest first, run:
 
     runagent -m porthos1 edit-repodata list-snapshots
 
@@ -263,7 +275,7 @@ To undo all the changes and bring back the original file run:
 
     runagent -m porthos1 edit-repodata restore
 
-The next `take-snapshot` run fetches a new copy of Distfeed, so the
+The next `take-snapshot` run fetches a new copy of Distfeed, so a
 removed release appears again unless it is withdrawn upstream too.
 
 ### Inspect the services status
