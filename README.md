@@ -89,11 +89,45 @@ PHP scripts are installed under the `script/` directory. It is mounted in the
 `fpm` container for execution. Changes to the contents of the `script/`
 directory are immediately applied.
 
-To locally override the FPM configuration file, create and edit a
-`state/fpm.conf` file. Then, append to the `state/environment` file a line
-like this:
+Local configuration overrides are read from two directories under
+`state/fpm/`. They are created empty when the `fpm` service starts, and
+are mounted in the container:
+
+- `state/fpm/fpm.d/*.conf` → `/etc/php/8.4/fpm/fpm.d/`, PHP-FPM settings.
+  Files are included at the end of the image `fpm.conf`, so they override
+  its values. Use it to tune the `porthos` pool size or enable the slow
+  request log. For example, `state/fpm/fpm.d/pool.conf`:
+
+      [porthos]
+      slowlog = /dev/stderr
+      pm.max_children = 50
+      pm.start_servers = 5
+      pm.min_spare_servers = 5
+      pm.max_spare_servers = 35
+
+- `state/fpm/local.d/*.ini` → `/etc/php/8.4/fpm/local.d/`, PHP settings
+  (`php.ini` syntax). Files are read after the image ones, including
+  the module security settings in `99-porthos.ini`. For example,
+  `state/fpm/local.d/local.ini`:
+
+      expose_php = Off
+
+Restart the service to apply changes:
+
+    runagent -m porthos1 systemctl --user restart fpm
+
+If `fpm.d/` is empty, PHP-FPM logs a harmless "Nothing matches the include
+pattern" warning at startup.
+
+As a last resort, the whole FPM configuration file can be replaced. Create
+a `state/fpm.conf` file, then append to the `state/environment` file a
+line like this:
 
     PORTHOS_FPM_PODMAN_ARGS=--volume=./fpm.conf:/srv/porthos/etc/fpm.conf:z
+
+A replaced `fpm.conf` hides future changes of the image file, and the
+`fpm.d/` directory is ignored unless the file includes it. Prefer the
+override directories.
 
 ### nginx
 
