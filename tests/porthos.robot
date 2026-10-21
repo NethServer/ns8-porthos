@@ -59,6 +59,12 @@ Mirrorlist returns urls
     URL Content Should Be Equal  http://${FQDN}/mirrorlist?repo=BaseOS-9&arch=x86_64  https://${FQDN}/rocky/9/BaseOS/x86_64/os/
     URL Content Should Be Equal  http://${FQDN}/mirrorlist?repo=AppStream-9&arch=x86_64  https://${FQDN}/rocky/9/AppStream/x86_64/os/
 
+POST requests are refused
+    ${out}  ${err}  ${rc} =  Execute Command    curl -k -s -o /dev/null -w '\%{http_code}' -F f=@/etc/hostname 'http://${FQDN}/mirrorlist?repo=BaseOS-9&arch=x86_64'
+    ...    return_rc=True    return_stderr=True
+    Should Be Equal As Integers    ${rc}  0    "curl error: ${err}"
+    Should Be Equal    ${out}    405
+
 DNF metadata is present
     URL Content Should Be Equal  https://${FQDN}/rocky/9/AppStream/x86_64/os/repodata/repomd.xml  init
 
