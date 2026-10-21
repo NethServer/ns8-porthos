@@ -75,6 +75,23 @@ Content is served from latest snapshot
 Authenticated client sees original snapshot
     URL Content Should Be Equal  https://${FQDN}/rocky/9/AppStream/x86_64/os/repodata/repomd.xml  init  user:pass
 
+FPM local overrides are applied
+    ${out}  ${err}  ${rc} =  Execute Command    runagent -m ${MID} sh -c 'cd ~/.config/state && printf "[porthos]\\npm.max_children = 7\\n" > fpm/fpm.d/test.conf && printf "expose_php = Off\\n" > fpm/local.d/test.ini && systemctl --user restart fpm'
+    ...    return_rc=True    return_stderr=True
+    Should Be Equal As Integers    ${rc}  0    "override setup error: ${err}"
+    ${out}  ${err}  ${rc} =  Execute Command    runagent -m ${MID} podman exec fpm php-fpm -tt -y /srv/porthos/etc/fpm.conf
+    ...    return_rc=True    return_stderr=True
+    Should Be Equal As Integers    ${rc}  0    "php-fpm config test error: ${err}"
+    Should Contain    ${err}    pm.max_children = 7
+    ${out}  ${err}  ${rc} =  Execute Command    runagent -m ${MID} podman exec fpm php-fpm -i
+    ...    return_rc=True    return_stderr=True
+    Should Be Equal As Integers    ${rc}  0    "php-fpm info error: ${err}"
+    Should Contain    ${out}    local.d/test.ini
+    Should Contain    ${out}    expose_php => Off
+    ${out}  ${err}  ${rc} =  Execute Command    runagent -m ${MID} sh -c 'cd ~/.config/state && rm -f fpm/fpm.d/test.conf fpm/local.d/test.ini && systemctl --user restart fpm'
+    ...    return_rc=True    return_stderr=True
+    Should Be Equal As Integers    ${rc}  0    "override cleanup error: ${err}"
+
 Check module removal
     [Tags]    remove
     ${rc} =    Execute Command    remove-module --no-preserve ${MID}
