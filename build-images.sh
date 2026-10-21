@@ -43,7 +43,7 @@ echo "Building the FPM image..."
 reponame="porthos-fpm"
 container=$(buildah from ${repobase}/porthos-fpm-base)
 buildah add "${container}" fpm /
-buildah run "${container}" -- sh -c 'ln -v -s /srv/porthos/etc/porthos.ini /etc/php/*/fpm/conf.d/99-porthos.ini'
+buildah run "${container}" -- sh -c 'cd /etc/php/*/fpm/conf.d && ln -v -s /srv/porthos/etc/porthos.ini 99-porthos.ini'
 buildah config \
     --volume=/srv/porthos/webroot \
     --entrypoint='["php-fpm", "-F", "-O", "-y", "/srv/porthos/etc/fpm.conf"]' \
