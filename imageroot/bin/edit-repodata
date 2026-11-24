@@ -40,6 +40,8 @@ Verbs:
                   head into repodata.json, in the same position they
                   have in the head. MODULE must already be in the
                   snapshot. The original file is kept as with "remove".
+                  Without -s, it fails if the latest snapshot is
+                  already served to some client tiers.
   diff            Print the differences between repodata.json.orig
                   and repodata.json, both pretty-printed.
   restore         Bring back the original repodata.json, undoing all
@@ -118,7 +120,9 @@ if [[ "${verb}" == list-snapshots ]]; then
     exit 0
 fi
 
+snapshot_is_default=0
 if [[ ${#snapshots[@]} -eq 0 ]]; then
+    snapshot_is_default=1
     if [[ ${#snapshot_list[@]} -eq 0 ]]; then
         die "No snapshot found\n"
     fi
@@ -139,6 +143,67 @@ module_tags() {
 # Return success if $module is found in the repodata file $1
 has_module() {
     jq -e --arg id "${module}" 'any(.[]; .id == $id)' "$1" >/dev/null
+}
+
+# Share (percent) and minimum snapshot age (days) of each client tier of
+# the managed view. Keep them in sync with system_tier() and $tier_age in
+# script/snapshot.php. Tiers are numbered from 1, as in README.md.
+tier_shares=(10 20 70)
+tier_ages=(3 4 5)
+
+# Print the creation time (Unix epoch, UTC) of snapshot $1, parsed from
+# its name like snapshot_age() in script/snapshot.php does
+snapshot_epoch() {
+    local name="$1"
+    date -u -d "${name:1:4}-${name:5:2}-${name:7:2} ${name:10:2}:${name:12:2}:${name:14:2}" +%s
+}
+
+# Find the client tiers that receive the content of snapshot $1 from the
+# managed view. A tier is served a snapshot from when it is old enough
+# for the tier, until the next newer snapshot is old enough too. Set
+# tiers_now (tiers served now), tiers_share (their share of clients)
+# and tiers_later (when the other tiers start being served).
+tier_status() {
+    local snapshot="$1" now start end next="" name i
+    tiers_now=()
+    tiers_share=0
+    tiers_later=()
+    now=$(date -u +%s)
+    for name in "${snapshot_list[@]}"; do
+        if [[ "${name}" > "${snapshot}" ]]; then
+            next="${name}"
+            break
+        fi
+    done
+    for i in "${!tier_ages[@]}"; do
+        start=$(( $(snapshot_epoch "${snapshot}") + tier_ages[i] * 86400 ))
+        end=""
+        if [[ -n "${next}" ]]; then
+            end=$(( $(snapshot_epoch "${next}") + tier_ages[i] * 86400 ))
+        fi
+        if [[ -n "${end}" && ${end} -le ${now} ]]; then
+            continue # a newer snapshot is already served to this tier
+        elif [[ ${start} -le ${now} ]]; then
+            tiers_now+=("$((i + 1))")
+            tiers_share=$((tiers_share + tier_shares[i]))
+        else
+            tiers_later+=("tier $((i + 1)) from $(LC_ALL=C date -u -d "@${start}" '+%a %F %H:%M UTC')")
+        fi
+    done
+}
+
+# Print the client tiers that receive the content of snapshot $1
+print_tiers() {
+    local snapshot="$1"
+    tier_status "${snapshot}"
+    if [[ ${#tiers_now[@]} -gt 0 ]]; then
+        printf "Snapshot %s is served now to tier(s) %s (%d%% of clients): they receive the picked version(s) at their next automatic update\n" \
+            "${snapshot}" "${tiers_now[*]}" "${tiers_share}" >&2
+    fi
+    if [[ ${#tiers_later[@]} -gt 0 ]]; then
+        printf "Snapshot %s is served to %s, unless a newer snapshot is taken before\n" \
+            "${snapshot}" "$(printf '%s\n' "${tiers_later[@]}" | paste -s -d ',' | sed 's/,/, /g')" >&2
+    fi
 }
 
 # Print the given versions that are (if $2 is "missing": are not) in
@@ -220,6 +285,15 @@ if [[ "${verb}" == pick ]]; then
     if [[ -n "${missing}" ]]; then
         die "Module %s version not found in %s: %s\n" "${module}" "${head_repodata}" "${missing}"
     fi
+    # Picking into the default snapshot must not publish the version to
+    # client tiers right away: the -s option is required to do it
+    if [[ ${snapshot_is_default} -eq 1 ]]; then
+        tier_status "${snapshots[0]}"
+        if [[ ${#tiers_now[@]} -gt 0 ]]; then
+            die "ERROR: snapshot %s is served now to tier(s) %s (%d%% of clients): they would receive the picked version(s) at their next automatic update. To proceed anyway, select the snapshot with -s %s\n" \
+                "${snapshots[0]}" "${tiers_now[*]}" "${tiers_share}" "${snapshots[0]}"
+        fi
+    fi
 fi
 for snapshot in "${snapshots[@]}"; do
     repodata="${snapshot}/distfeed/repodata.json"
@@ -264,6 +338,7 @@ for snapshot in "${snapshots[@]}"; do
                 else .
                 end)' --slurpfile head "${head_repodata}"
         printf "Picked %s version(s) from %s into %s: %s\n" "${module}" "${head_repodata}" "${repodata}" "${versions[*]}"
+        print_tiers "${snapshot}"
     fi
     printf "Versions of %s now in %s: %s\n" "${module}" "${snapshot}" "$(module_tags "${repodata}" | paste -s -d ' ')"
 done
