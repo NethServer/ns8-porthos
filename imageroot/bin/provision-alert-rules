@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# Publish the module alert rules for the metrics module. They evaluate
+# the metrics printed by export-metrics.
+#
+
+import os
+import agent
+
+module_id = os.environ['MODULE_ID']
+agent_id = os.environ['AGENT_ID']
+
+snapshot_rule = """\
+alert: PorthosSnapshotFailed
+expr: porthos_snapshot_failed == 1
+for: 10m
+labels:
+  severity: critical
+annotations:
+  summary_en: Porthos snapshot failed
+  summary_it: Snapshot di Porthos non riuscito
+  description_en: >-
+    The last run of snapshot.service failed and no new snapshot was
+    created. Check the service log and run take-snapshot again.
+  description_it: >-
+    L'ultima esecuzione di snapshot.service non è riuscita e non è stato
+    creato un nuovo snapshot. Controllare il log del servizio ed eseguire
+    di nuovo take-snapshot.
+"""
+
+trx = agent.redis_connect(privileged=True).pipeline()
+trx.hset(f"module/{module_id}/metrics_alert_rules", "snapshot", snapshot_rule)
+trx.publish(f"{agent_id}/event/metrics-alert-rules-changed", "{}")
+trx.execute()
