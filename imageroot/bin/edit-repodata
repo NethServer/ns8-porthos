@@ -290,7 +290,7 @@ if [[ "${verb}" == pick ]]; then
     if [[ ${snapshot_is_default} -eq 1 ]]; then
         tier_status "${snapshots[0]}"
         if [[ ${#tiers_now[@]} -gt 0 ]]; then
-            die "Snapshot %s is served now to tier(s) %s (%d%% of clients): they would receive the picked version(s) at their next automatic update. To proceed anyway, select the snapshot with -s %s\n" \
+            die "ERROR: snapshot %s is served now to tier(s) %s (%d%% of clients): they would receive the picked version(s) at their next automatic update. To proceed anyway, select the snapshot with -s %s\n" \
                 "${snapshots[0]}" "${tiers_now[*]}" "${tiers_share}" "${snapshots[0]}"
         fi
     fi
