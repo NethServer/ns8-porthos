@@ -12,7 +12,6 @@
 #
 
 set -e
-shopt -s nullglob
 
 snapshot_failed=0
 if [[ "$(systemctl --user show --property=ActiveState --value snapshot.service)" == failed ]]; then
@@ -20,19 +19,17 @@ if [[ "$(systemctl --user show --property=ActiveState --value snapshot.service)"
 fi
 
 # Creation time of the latest snapshot, parsed from its name like
-# snapshot_age() in script/snapshot.php does. Empty if there is none.
+# snapshot_age() in script/snapshot.php does. The fpm container lists
+# the snapshots it serves, sorted by name. Empty if there is none, or
+# if fpm is not running, as the module is not configured yet.
 snapshot_timestamp=""
-if webroot=$(podman volume inspect webroot 2>/dev/null | jq -r '.[]
-    | if .Options.type == "bind" and (.Options.device? != null)
-      then .Options.device
-      else .Mountpoint
-      end'
-); then
-    snapshot_list=("${webroot}"/d20*)
-    if [[ ${#snapshot_list[@]} -gt 0 ]]; then
-        name="${snapshot_list[-1]##*/}"
-        snapshot_timestamp=$(date -u -d "${name:1:4}-${name:5:2}-${name:7:2} ${name:10:2}:${name:12:2}:${name:14:2}" +%s)
-    fi
+# shellcheck disable=SC2016
+name=$(podman exec fpm php -r '
+    $snapshots = glob("/srv/porthos/webroot/d20*");
+    echo $snapshots ? basename(end($snapshots)) : "";
+' 2>/dev/null) || name=""
+if [[ -n "${name}" ]]; then
+    snapshot_timestamp=$(date -u -d "${name:1:4}-${name:5:2}-${name:7:2} ${name:10:2}:${name:12:2}:${name:14:2}" +%s)
 fi
 
 cat <<EOF

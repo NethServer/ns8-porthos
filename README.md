@@ -341,7 +341,8 @@ it every 5 minutes:
 - `porthos_snapshot_failed`, 1 if the last run of `snapshot.service`
   failed, otherwise 0.
 - `porthos_snapshot_last_timestamp_seconds`, creation time of the
-  latest snapshot, read from its name. Missing if there is no snapshot.
+  latest snapshot, read from its name. Missing if there is no snapshot,
+  or if the `fpm` container is not running.
 
 The alert rules are stored in the Redis key
 `module/porthos1/metrics_alert_rules` by `configure-module`, and again
