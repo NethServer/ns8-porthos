@@ -344,8 +344,8 @@ it every 5 minutes:
   latest snapshot, read from its name. Missing if there is no snapshot.
 
 The alert rules are stored in the Redis key
-`module/porthos1/metrics_alert_rules`, when the module is installed or
-updated:
+`module/porthos1/metrics_alert_rules` by `configure-module`, and again
+when a configured module is updated:
 
 - `PorthosSnapshotFailed` (critical), `snapshot.service` is failed:
   no new snapshot was created. The alert is resolved when the service

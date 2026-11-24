@@ -5,8 +5,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
+# Publish the alert rules of this module version, if configure-module
+# has already run. Otherwise it publishes them.
+
 set -e
 
 exec 1>&2
 
-"${AGENT_INSTALL_DIR}"/bin/provision-alert-rules
+if [[ -n "${PORTHOS_FIRST_CONFIG}" ]]; then
+    provision-alert-rules
+fi
