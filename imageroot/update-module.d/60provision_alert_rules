@@ -1,0 +1,17 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Publish the alert rules of this module version, if configure-module
+# has already run. Otherwise it publishes them.
+
+set -e
+
+exec 1>&2
+
+if [[ -n "${PORTHOS_FIRST_CONFIG}" ]]; then
+    provision-alert-rules
+fi

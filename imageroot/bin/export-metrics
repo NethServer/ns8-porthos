@@ -1,0 +1,50 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# Print the module metrics in the Prometheus text format. The node runs
+# this command every 5 minutes and publishes its output through
+# node_exporter. See "Metrics" in the NS8 developer manual.
+#
+
+set -e
+
+snapshot_failed=0
+if [[ "$(systemctl --user show --property=ActiveState --value snapshot.service)" == failed ]]; then
+    snapshot_failed=1
+fi
+
+# Creation time of the latest snapshot, parsed from its name like
+# snapshot_age() in script/snapshot.php does. The fpm container lists
+# the snapshots it serves, sorted by name. Empty if there is none, or
+# if fpm is not running, as the module is not configured yet.
+# shellcheck disable=SC2016
+snapshot_timestamp=$(podman exec fpm php -r '
+    $snapshots = glob("/srv/porthos/webroot/d20*");
+    if ($snapshots) {
+        $name = basename(end($snapshots));
+        $dt = new DateTime(sprintf("%s-%s-%s %s:%s:%s",
+            substr($name, 1, 4), substr($name, 5, 2), substr($name, 7, 2),
+            substr($name, 10, 2), substr($name, 12, 2), substr($name, 14, 2)),
+            new DateTimeZone("UTC"));
+        echo $dt->getTimestamp();
+    }
+' 2>/dev/null) || snapshot_timestamp=""
+
+cat <<EOF
+# HELP porthos_snapshot_failed Whether the last run of snapshot.service failed
+# TYPE porthos_snapshot_failed gauge
+porthos_snapshot_failed ${snapshot_failed}
+EOF
+
+if [[ -n "${snapshot_timestamp}" ]]; then
+    cat <<EOF
+# HELP porthos_snapshot_last_timestamp_seconds Creation time of the latest snapshot
+# TYPE porthos_snapshot_last_timestamp_seconds gauge
+porthos_snapshot_last_timestamp_seconds ${snapshot_timestamp}
+EOF
+fi

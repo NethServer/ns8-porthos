@@ -329,6 +329,38 @@ Print the status of relevant Systemd units:
 
     runagent -m porthos1 systemctl --user status fpm.service nginx.service snapshot.timer sync-head.timer
 
+## Metrics and alerts
+
+The module publishes its metrics and alert rules for the `metrics`
+module, which evaluates them and sends the alerts.
+
+The `export-metrics` command prints the module metrics. The node runs
+it every 5 minutes:
+
+- `porthos_snapshot_failed`, 1 if the last run of `snapshot.service`
+  failed, otherwise 0.
+- `porthos_snapshot_last_timestamp_seconds`, creation time of the
+  latest snapshot, read from its name. Missing if there is no snapshot,
+  or if the `fpm` container is not running.
+
+The alert rules are stored in the Redis key
+`module/porthos1/metrics_alert_rules` by `configure-module`, and again
+when a configured module is updated:
+
+- `PorthosSnapshotFailed` (critical), `snapshot.service` is failed:
+  no new snapshot was created. It fires after 1 hour, and it is
+  resolved when the service runs again successfully, or its failed
+  state is reset with:
+
+      runagent -m porthos1 systemctl --user reset-failed snapshot.service
+
+- `PorthosSnapshotTooOld`, the latest snapshot is old, so clients do not
+  receive new updates. Its severity grows with the snapshot age: `info`
+  after 1 week, `warning` after 2 weeks, `critical` after 3 weeks. It
+  fires after 1 hour, to leave time to the weekly snapshot run. The
+  metrics module logs a warning for the `info` severity, as it
+  recommends only `warning` and `critical`: the rule works anyway.
+
 
 ## Testing
 

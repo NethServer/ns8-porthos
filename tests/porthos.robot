@@ -44,6 +44,19 @@ Check take-snapshot run
     Should Be Equal As Integers    ${rc}  0    "take-snapshot error: ${err}"
     Rename snapshot to make it 7 days older
 
+Alert rules are published
+    ${out}  ${rc} =  Execute Command    redis-cli hget module/${MID}/metrics_alert_rules snapshot
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}  0
+    Should Contain    ${out}    alert: PorthosSnapshotFailed
+
+Snapshot metrics are exported
+    ${out}  ${err}  ${rc} =  Execute Command    runagent -m ${MID} export-metrics
+    ...    return_rc=True    return_stderr=True
+    Should Be Equal As Integers    ${rc}  0    "export-metrics error: ${err}"
+    Should Contain    ${out}    porthos_snapshot_failed 0
+    Should Contain    ${out}    porthos_snapshot_last_timestamp_seconds
+
 Check sync-head run
     ${out}  ${err}  ${rc} =  Execute Command    runagent -m ${MID} sync-head
     ...    return_rc=True    return_stderr=True
