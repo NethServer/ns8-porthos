@@ -141,6 +141,57 @@ has_module() {
     jq -e --arg id "${module}" 'any(.[]; .id == $id)' "$1" >/dev/null
 }
 
+# Share (percent) and minimum snapshot age (days) of each client tier of
+# the managed view. Keep them in sync with system_tier() and $tier_age in
+# script/snapshot.php. Tiers are numbered from 1, as in README.md.
+tier_shares=(10 20 70)
+tier_ages=(3 4 5)
+
+# Print the creation time (Unix epoch, UTC) of snapshot $1, parsed from
+# its name like snapshot_age() in script/snapshot.php does
+snapshot_epoch() {
+    local name="$1"
+    date -u -d "${name:1:4}-${name:5:2}-${name:7:2} ${name:10:2}:${name:12:2}:${name:14:2}" +%s
+}
+
+# Warn about the client tiers that receive the content of snapshot $1
+# from the managed view. A tier is served a snapshot from when it is old
+# enough for the tier, until the next newer snapshot is old enough too.
+warn_tiers() {
+    local snapshot="$1" now start end next="" name i share=0
+    local tiers_now=() tiers_later=()
+    now=$(date -u +%s)
+    for name in "${snapshot_list[@]}"; do
+        if [[ "${name}" > "${snapshot}" ]]; then
+            next="${name}"
+            break
+        fi
+    done
+    for i in "${!tier_ages[@]}"; do
+        start=$(( $(snapshot_epoch "${snapshot}") + tier_ages[i] * 86400 ))
+        end=""
+        if [[ -n "${next}" ]]; then
+            end=$(( $(snapshot_epoch "${next}") + tier_ages[i] * 86400 ))
+        fi
+        if [[ -n "${end}" && ${end} -le ${now} ]]; then
+            continue # a newer snapshot is already served to this tier
+        elif [[ ${start} -le ${now} ]]; then
+            tiers_now+=("$((i + 1))")
+            share=$((share + tier_shares[i]))
+        else
+            tiers_later+=("tier $((i + 1)) from $(LC_ALL=C date -u -d "@${start}" '+%a %F %H:%M UTC')")
+        fi
+    done
+    if [[ ${#tiers_now[@]} -gt 0 ]]; then
+        printf "WARNING: snapshot %s is served now to tier(s) %s (%d%% of clients): they receive the picked version(s) at their next automatic update\n" \
+            "${snapshot}" "${tiers_now[*]}" "${share}" >&2
+    fi
+    if [[ ${#tiers_later[@]} -gt 0 ]]; then
+        printf "Snapshot %s is served to %s, unless a newer snapshot is taken before\n" \
+            "${snapshot}" "$(printf '%s\n' "${tiers_later[@]}" | paste -s -d ',' | sed 's/,/, /g')" >&2
+    fi
+}
+
 # Print the given versions that are (if $2 is "missing": are not) in
 # the repodata file $1, separated by spaces
 filter_versions() {
@@ -264,6 +315,7 @@ for snapshot in "${snapshots[@]}"; do
                 else .
                 end)' --slurpfile head "${head_repodata}"
         printf "Picked %s version(s) from %s into %s: %s\n" "${module}" "${head_repodata}" "${repodata}" "${versions[*]}"
+        warn_tiers "${snapshot}"
     fi
     printf "Versions of %s now in %s: %s\n" "${module}" "${snapshot}" "$(module_tags "${repodata}" | paste -s -d ' ')"
 done
