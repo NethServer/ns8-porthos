@@ -40,6 +40,8 @@ Verbs:
                   head into repodata.json, in the same position they
                   have in the head. MODULE must already be in the
                   snapshot. The original file is kept as with "remove".
+                  Without -s, it fails if the latest snapshot is
+                  already served to some client tiers.
   diff            Print the differences between repodata.json.orig
                   and repodata.json, both pretty-printed.
   restore         Bring back the original repodata.json, undoing all
@@ -118,7 +120,9 @@ if [[ "${verb}" == list-snapshots ]]; then
     exit 0
 fi
 
+snapshot_is_default=0
 if [[ ${#snapshots[@]} -eq 0 ]]; then
+    snapshot_is_default=1
     if [[ ${#snapshot_list[@]} -eq 0 ]]; then
         die "No snapshot found\n"
     fi
@@ -154,12 +158,16 @@ snapshot_epoch() {
     date -u -d "${name:1:4}-${name:5:2}-${name:7:2} ${name:10:2}:${name:12:2}:${name:14:2}" +%s
 }
 
-# Warn about the client tiers that receive the content of snapshot $1
-# from the managed view. A tier is served a snapshot from when it is old
-# enough for the tier, until the next newer snapshot is old enough too.
-warn_tiers() {
-    local snapshot="$1" now start end next="" name i share=0
-    local tiers_now=() tiers_later=()
+# Find the client tiers that receive the content of snapshot $1 from the
+# managed view. A tier is served a snapshot from when it is old enough
+# for the tier, until the next newer snapshot is old enough too. Set
+# tiers_now (tiers served now), tiers_share (their share of clients)
+# and tiers_later (when the other tiers start being served).
+tier_status() {
+    local snapshot="$1" now start end next="" name i
+    tiers_now=()
+    tiers_share=0
+    tiers_later=()
     now=$(date -u +%s)
     for name in "${snapshot_list[@]}"; do
         if [[ "${name}" > "${snapshot}" ]]; then
@@ -177,14 +185,20 @@ warn_tiers() {
             continue # a newer snapshot is already served to this tier
         elif [[ ${start} -le ${now} ]]; then
             tiers_now+=("$((i + 1))")
-            share=$((share + tier_shares[i]))
+            tiers_share=$((tiers_share + tier_shares[i]))
         else
             tiers_later+=("tier $((i + 1)) from $(LC_ALL=C date -u -d "@${start}" '+%a %F %H:%M UTC')")
         fi
     done
+}
+
+# Print the client tiers that receive the content of snapshot $1
+print_tiers() {
+    local snapshot="$1"
+    tier_status "${snapshot}"
     if [[ ${#tiers_now[@]} -gt 0 ]]; then
-        printf "WARNING: snapshot %s is served now to tier(s) %s (%d%% of clients): they receive the picked version(s) at their next automatic update\n" \
-            "${snapshot}" "${tiers_now[*]}" "${share}" >&2
+        printf "Snapshot %s is served now to tier(s) %s (%d%% of clients): they receive the picked version(s) at their next automatic update\n" \
+            "${snapshot}" "${tiers_now[*]}" "${tiers_share}" >&2
     fi
     if [[ ${#tiers_later[@]} -gt 0 ]]; then
         printf "Snapshot %s is served to %s, unless a newer snapshot is taken before\n" \
@@ -271,6 +285,15 @@ if [[ "${verb}" == pick ]]; then
     if [[ -n "${missing}" ]]; then
         die "Module %s version not found in %s: %s\n" "${module}" "${head_repodata}" "${missing}"
     fi
+    # Picking into the default snapshot must not publish the version to
+    # client tiers right away: the -s option is required to do it
+    if [[ ${snapshot_is_default} -eq 1 ]]; then
+        tier_status "${snapshots[0]}"
+        if [[ ${#tiers_now[@]} -gt 0 ]]; then
+            die "Snapshot %s is served now to tier(s) %s (%d%% of clients): they would receive the picked version(s) at their next automatic update. To proceed anyway, select the snapshot with -s %s\n" \
+                "${snapshots[0]}" "${tiers_now[*]}" "${tiers_share}" "${snapshots[0]}"
+        fi
+    fi
 fi
 for snapshot in "${snapshots[@]}"; do
     repodata="${snapshot}/distfeed/repodata.json"
@@ -315,7 +338,7 @@ for snapshot in "${snapshots[@]}"; do
                 else .
                 end)' --slurpfile head "${head_repodata}"
         printf "Picked %s version(s) from %s into %s: %s\n" "${module}" "${head_repodata}" "${repodata}" "${versions[*]}"
-        warn_tiers "${snapshot}"
+        print_tiers "${snapshot}"
     fi
     printf "Versions of %s now in %s: %s\n" "${module}" "${snapshot}" "$(module_tags "${repodata}" | paste -s -d ' ')"
 done

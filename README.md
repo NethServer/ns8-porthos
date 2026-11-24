@@ -288,13 +288,16 @@ is taken, run:
 The picked version gets the same position it has in the head. The module
 must already be in the snapshot.
 
+If the latest snapshot is already served to some client tiers by the
+`managed` view, the command fails without changes: those tiers would
+get the picked version at their next automatic update, skipping the
+gradual rollout described in the Content schedule section. To pick into
+it anyway, select the snapshot explicitly with `-s`.
+
 After a pick, the command prints the client tiers that already receive
-the snapshot from the `managed` view, with a `WARNING` line: they get
-the picked version at their next automatic update. It prints also when
-the remaining tiers start receiving the snapshot. Picking into a snapshot
-older than 5 days, or into the only snapshot available, reaches every
-tier at once and skips the gradual rollout described in the Content
-schedule section.
+the snapshot, and when the remaining tiers start receiving it. A
+snapshot older than 5 days, or the only snapshot available, reaches
+every tier at once.
 
 Use `-s SNAPSHOT` with `list`, `remove` and `pick` to work on a snapshot
 other than the latest one. With `remove` and `pick` the option can be
