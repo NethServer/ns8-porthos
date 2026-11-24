@@ -22,15 +22,18 @@ fi
 # snapshot_age() in script/snapshot.php does. The fpm container lists
 # the snapshots it serves, sorted by name. Empty if there is none, or
 # if fpm is not running, as the module is not configured yet.
-snapshot_timestamp=""
 # shellcheck disable=SC2016
-name=$(podman exec fpm php -r '
+snapshot_timestamp=$(podman exec fpm php -r '
     $snapshots = glob("/srv/porthos/webroot/d20*");
-    echo $snapshots ? basename(end($snapshots)) : "";
-' 2>/dev/null) || name=""
-if [[ -n "${name}" ]]; then
-    snapshot_timestamp=$(date -u -d "${name:1:4}-${name:5:2}-${name:7:2} ${name:10:2}:${name:12:2}:${name:14:2}" +%s)
-fi
+    if ($snapshots) {
+        $name = basename(end($snapshots));
+        $dt = new DateTime(sprintf("%s-%s-%s %s:%s:%s",
+            substr($name, 1, 4), substr($name, 5, 2), substr($name, 7, 2),
+            substr($name, 10, 2), substr($name, 12, 2), substr($name, 14, 2)),
+            new DateTimeZone("UTC"));
+        echo $dt->getTimestamp();
+    }
+' 2>/dev/null) || snapshot_timestamp=""
 
 cat <<EOF
 # HELP porthos_snapshot_failed Whether the last run of snapshot.service failed
