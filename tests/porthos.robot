@@ -55,6 +55,7 @@ Snapshot metrics are exported
     ...    return_rc=True    return_stderr=True
     Should Be Equal As Integers    ${rc}  0    "export-metrics error: ${err}"
     Should Contain    ${out}    porthos_snapshot_failed 0
+    Should Contain    ${out}    porthos_snapshot_last_timestamp_seconds
 
 Check sync-head run
     ${out}  ${err}  ${rc} =  Execute Command    runagent -m ${MID} sync-head

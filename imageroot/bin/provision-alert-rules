@@ -16,25 +16,58 @@ import agent
 module_id = os.environ['MODULE_ID']
 agent_id = os.environ['AGENT_ID']
 
-snapshot_rule = """\
-alert: PorthosSnapshotFailed
-expr: porthos_snapshot_failed == 1
-for: 10m
-labels:
-  severity: critical
-annotations:
-  summary_en: Porthos snapshot failed
-  summary_it: Snapshot di Porthos non riuscito
-  description_en: >-
-    The last run of snapshot.service failed and no new snapshot was
-    created. Check the service log and run take-snapshot again.
-  description_it: >-
-    L'ultima esecuzione di snapshot.service non è riuscita e non è stato
-    creato un nuovo snapshot. Controllare il log del servizio ed eseguire
-    di nuovo take-snapshot.
+# The PorthosSnapshotTooOld rules cover separate age ranges, so only the
+# one of the current age fires. The 1h delay leaves time to the weekly
+# snapshot, as the previous one gets 7 days old when the next run starts.
+snapshot_rules = """\
+groups:
+- name: snapshot
+  rules:
+  - alert: PorthosSnapshotFailed
+    expr: porthos_snapshot_failed == 1
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      summary_en: Porthos snapshot failed
+      summary_it: Snapshot di Porthos non riuscito
+      description_en: >-
+        The last run of snapshot.service failed and no new snapshot was
+        created. Check the service log and run take-snapshot again.
+      description_it: >-
+        L'ultima esecuzione di snapshot.service non è riuscita e non è stato
+        creato un nuovo snapshot. Controllare il log del servizio ed eseguire
+        di nuovo take-snapshot.
+"""
+
+age_ranges = [
+    # severity, minimum days (excluded), maximum days (included)
+    ("info", 7, 14),
+    ("warning", 14, 21),
+    ("critical", 21, None),
+]
+for severity, min_days, max_days in age_ranges:
+    expr = f"(time() - porthos_snapshot_last_timestamp_seconds) / 86400 > {min_days}"
+    if max_days:
+        expr += f" <= {max_days}"
+    snapshot_rules += f"""\
+  - alert: PorthosSnapshotTooOld
+    expr: {expr}
+    for: 1h
+    labels:
+      severity: {severity}
+    annotations:
+      summary_en: Porthos snapshot is too old
+      summary_it: Snapshot di Porthos troppo vecchio
+      description_en: >-
+        The latest snapshot is older than {min_days} days: clients do not
+        receive new updates. Check snapshot.service and its timer.
+      description_it: >-
+        L'ultimo snapshot ha più di {min_days} giorni: i client non ricevono
+        nuovi aggiornamenti. Controllare snapshot.service e il suo timer.
 """
 
 trx = agent.redis_connect(privileged=True).pipeline()
-trx.hset(f"module/{module_id}/metrics_alert_rules", "snapshot", snapshot_rule)
+trx.hset(f"module/{module_id}/metrics_alert_rules", "snapshot", snapshot_rules)
 trx.publish(f"{agent_id}/event/metrics-alert-rules-changed", "{}")
 trx.execute()
