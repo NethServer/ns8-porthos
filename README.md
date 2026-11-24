@@ -332,8 +332,7 @@ Print the status of relevant Systemd units:
 ## Metrics and alerts
 
 The module publishes its metrics and alert rules for the `metrics`
-module, which evaluates them and sends the alerts. It requires core
-3.24.0 and metrics 1.7.0, or later.
+module, which evaluates them and sends the alerts.
 
 The `export-metrics` command prints the module metrics. The node runs
 it every 5 minutes:
@@ -349,8 +348,9 @@ The alert rules are stored in the Redis key
 when a configured module is updated:
 
 - `PorthosSnapshotFailed` (critical), `snapshot.service` is failed:
-  no new snapshot was created. The alert is resolved when the service
-  runs again successfully, or its failed state is reset with:
+  no new snapshot was created. It fires after 1 hour, and it is
+  resolved when the service runs again successfully, or its failed
+  state is reset with:
 
       runagent -m porthos1 systemctl --user reset-failed snapshot.service
 
