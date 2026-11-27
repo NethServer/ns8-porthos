@@ -35,11 +35,15 @@ local_prefix=rocky/
 # run with --delay-updates: it is not readable and fails the transfer
 # with code 23. The check against the other mirrors catches an
 # inconsistent copy. Remove the directory if an older snapshot has it.
-rsync_opts=(-aiSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after --exclude=.~tmp~/ --delete-excluded)
+rsync_opts=(-aSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after --exclude=.~tmp~/ --delete-excluded)
+# The fetch logs a summary, not a line per file: a new Rocky Linux
+# release changes thousands of files, and journald drops such bursts
+# together with the lines that matter.
+fetch_opts=("${rsync_opts[@]}" --stats)
 # The check is a dry run: it lists the differences between a check
 # mirror and the fetched copy. Directory times depend on when each
 # mirror ran its own sync: ignore them.
-check_opts=("${rsync_opts[@]}" --dry-run --omit-dir-times)
+check_opts=("${rsync_opts[@]}" --itemize-changes --dry-run --omit-dir-times)
 distfeed_url=https://github.com/NethServer/ns8-repomd/archive/refs/heads/repomd.tar.gz
 
 # Run "$@", retrying on failure up to retry_max_attempts times with a
@@ -108,7 +112,7 @@ check_repo() {
 # runs both again, as the mirrors may be in sync later.
 sync_repo() {
     local repo_path=$1
-    run_rsync take-snapshot "${rsync_opts[@]}" \
+    run_rsync take-snapshot "${fetch_opts[@]}" \
         "${source_url}${repo_path}" "${snapshot_dir}/${local_prefix}${repo_path}" || return $?
     check_repo "${repo_path}"
 }
