@@ -13,7 +13,7 @@ source /etc/nethserver/core.env
 snapshot_retention=${PORTHOS_RETENTION:-45}
 retry_max_attempts=${PORTHOS_RETRY_MAX_ATTEMPTS:-3}
 retry_delay=${PORTHOS_RETRY_DELAY:-1800}
-snapshot_dir=tmp.$(date +d%Y%m%dt%H%I%S%2N)
+snapshot_dir=tmp.$(date +d%Y%m%dt%H%M%S%2N)
 # Base URLs of the Rocky Linux tree, the directory holding "9/". The
 # fetch source is copied into the snapshot; the check sources are other
 # mirrors, compared with it to accept the copy. Normalize the trailing

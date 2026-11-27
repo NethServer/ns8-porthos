@@ -10,7 +10,7 @@ shopt -s nullglob
 
 # shellcheck disable=SC1091
 source /etc/nethserver/core.env
-new_head=tmp.$(date +head.%Y%m%dt%H%I%S%2N)
+new_head=tmp.$(date +head.%Y%m%dt%H%M%S%2N)
 rsync_opts=(-aiSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after)
 distfeed_url=https://github.com/NethServer/ns8-repomd/archive/refs/heads/repomd.tar.gz
 
