@@ -17,8 +17,9 @@ module_id = os.environ['MODULE_ID']
 agent_id = os.environ['AGENT_ID']
 
 # The PorthosSnapshotTooOld rules cover separate age ranges, so only the
-# one of the current age fires. The 1h delay leaves time to the weekly
-# snapshot, as the previous one gets 7 days old when the next run starts.
+# one of the current age fires. The 3h delay leaves time to the weekly
+# snapshot, as the previous one gets 7 days old when the next run starts,
+# and the run retries the mirror sync up to 3 times, 30 minutes apart.
 snapshot_rules = """\
 groups:
 - name: snapshot
@@ -33,11 +34,11 @@ groups:
       summary_it: Snapshot di Porthos non riuscito
       description_en: >-
         The last run of snapshot.service failed and no new snapshot was
-        created. Check the service log and run take-snapshot again.
+        created. Check the service log and start snapshot.service again.
       description_it: >-
         L'ultima esecuzione di snapshot.service non è riuscita e non è stato
-        creato un nuovo snapshot. Controllare il log del servizio ed eseguire
-        di nuovo take-snapshot.
+        creato un nuovo snapshot. Controllare il log del servizio e avviare
+        di nuovo snapshot.service.
 """
 
 age_ranges = [
@@ -53,7 +54,7 @@ for severity, min_days, max_days in age_ranges:
     snapshot_rules += f"""\
   - alert: PorthosSnapshotTooOld
     expr: {expr}
-    for: 1h
+    for: 3h
     labels:
       severity: {severity}
     annotations:

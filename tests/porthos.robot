@@ -1,5 +1,6 @@
 *** Settings ***
 Library    SSHLibrary
+Library    Collections
 
 *** Variables ***
 ${SCENARIO}     install
@@ -23,7 +24,7 @@ Configure module
     ${out}  ${err}  ${rc} =  Execute Command    runagent -m ${MID} podman volume rm -f webroot
     ...    return_rc=True    return_stderr=True
     Should Be Equal As Integers    ${rc}  0    "volume removal error: ${err}"
-    Run task    module/${MID}/configure-module  {"source": "rsync://127.0.0.1:10000/data","retention":45}
+    Run task    module/${MID}/configure-module  {"source": "rsync://127.0.0.1:10000/data/rocky/","retention":45}
 
 Check module update
     [Tags]    create
@@ -33,9 +34,15 @@ Check module update
         Should Be Equal As Integers  ${rc}  0  action update-module ${IMAGE_URL} failed
     END
 
+Configure check sources
+    # The first one does not exist, the second one matches the source
+    Run task    module/${MID}/configure-module  {"check_sources":["rsync://127.0.0.1:10000/data/missing/","rsync://127.0.0.1:10000/data/rocky"]}
+
 Check module config
     &{output} =    Run task    module/${MID}/get-configuration  {}
-    Should Be Equal    ${output}[source]    rsync://127.0.0.1:10000/data
+    Should Be Equal    ${output}[source]    rsync://127.0.0.1:10000/data/rocky/
+    ${expected} =    Create List    rsync://127.0.0.1:10000/data/missing/    rsync://127.0.0.1:10000/data/rocky
+    Lists Should Be Equal    ${output}[check_sources]    ${expected}
     Set Global Variable    ${FQDN}    ${output}[server_name]
 
 Check take-snapshot run
@@ -56,6 +63,20 @@ Snapshot metrics are exported
     Should Be Equal As Integers    ${rc}  0    "export-metrics error: ${err}"
     Should Contain    ${out}    porthos_snapshot_failed 0
     Should Contain    ${out}    porthos_snapshot_last_timestamp_seconds
+
+Take-snapshot fails if no check mirror matches
+    ${before}  ${rc} =  Execute Command    runagent -m ${MID} podman exec nginx sh -c 'ls -1d /srv/porthos/webroot/d20* | wc -l'
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}  0
+    Run task    module/${MID}/configure-module  {"check_sources":["rsync://127.0.0.1:10000/data/missing/"]}
+    ${out}  ${err}  ${rc} =  Execute Command    runagent -m ${MID} env PORTHOS_RETRY_MAX_ATTEMPTS=1 take-snapshot
+    ...    return_rc=True    return_stderr=True
+    Should Not Be Equal As Integers    ${rc}  0
+    Should Contain    ${err}    No check mirror matches
+    ${after}  ${rc} =  Execute Command    runagent -m ${MID} podman exec nginx sh -c 'ls -1d /srv/porthos/webroot/d20* | wc -l'
+    ...    return_rc=True
+    Should Be Equal    ${before}    ${after}
+    [Teardown]    Run task    module/${MID}/configure-module  {"check_sources":["rsync://127.0.0.1:10000/data/missing/","rsync://127.0.0.1:10000/data/rocky/"]}
 
 Check sync-head run
     ${out}  ${err}  ${rc} =  Execute Command    runagent -m ${MID} sync-head

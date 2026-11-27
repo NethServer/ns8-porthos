@@ -12,6 +12,7 @@ import os
 
 config = {
     'source': os.environ['PORTHOS_SOURCE'],
+    'check_sources': [url for url in os.environ.get('PORTHOS_CHECK_SOURCES', '').split(',') if url],
     'retention': int(os.environ['PORTHOS_RETENTION']),
     'server_name': os.environ['PORTHOS_SERVER_NAME'],
 }

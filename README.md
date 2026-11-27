@@ -44,7 +44,11 @@ Output
 
 ```json
 {
-    "source": "rsync://mirror1.hs-esslingen.de",
+    "source": "rsync://ftp.fau.de/rockylinux/",
+    "check_sources": [
+        "rsync://ftp.halifax.rwth-aachen.de/rockylinux/",
+        "rsync://mirror.netzwerge.de/rocky-linux/"
+    ],
     "retention": 45,
     "server_name": "rl1.dp.nethserver.net"
 }
@@ -78,7 +82,14 @@ Services are:
 ## Environment variables
 
 - `PORTHOS_RETENTION`, number of snapshots preserved under `/srv/porthos/webroot`
-- `PORTHOS_SOURCE`, base `rsync://` URL to a Rocky Linux official mirror
+- `PORTHOS_SOURCE`, base `rsync://` URL of the Rocky Linux tree on an
+  official mirror, the directory holding `9/`, for example
+  `rsync://ftp.fau.de/rockylinux/`. Snapshots copy it
+- `PORTHOS_CHECK_SOURCES`, comma-separated base `rsync://` URLs of the
+  Rocky Linux tree on other official mirrors, used to check the copy
+  (see `take-snapshot`). If empty (default), the check is disabled
+- `PORTHOS_RETRY_MAX_ATTEMPTS` (default `3`) and `PORTHOS_RETRY_DELAY`
+  (seconds, default `1800`), attempts of the mirror sync of `take-snapshot`
 - `PORTHOS_SERVER_NAME`, name of virtual HTTP server; by default the node FQDN is set
 
 ## Containers
@@ -242,18 +253,30 @@ understand the implications.
 
 ### `take-snapshot`
 
-To create a snapshot manually run:
-
-    runagent -m porthos1 take-snapshot
-
-As alternative start the equivalent Systemd service:
+To create a snapshot manually, start the Systemd service. The command
+returns immediately: follow the progress in the service log.
 
     runagent -m porthos1 systemctl --user start snapshot
+    journalctl -f -t snapshot
 
 Each snapshot contains a copy of NS8 Distfeed data fetched from GitHub and
 an exact copy of Rocky Linux BaseOS and AppStream DNF repositories. To
 save disk space and performance, it is recommended to store the snapshots
 on a filesystem or block device that provides data deduplication.
+
+The Rocky Linux repositories are fetched from `PORTHOS_SOURCE`, then
+compared with the mirrors in `PORTHOS_CHECK_SOURCES`, with an rsync dry
+run that ignores directory times. The copy is accepted if one of them has
+the same files, sizes and modification times. It ensures the snapshot is
+not taken from a mirror that is outdated, or caught in the middle of its
+own sync. A check mirror that cannot be read does not match. The
+`.~tmp~` staging directories of mirrors are always excluded.
+
+If no check mirror matches, or the fetch fails, the fetch and the check
+are retried up to `PORTHOS_RETRY_MAX_ATTEMPTS` times, waiting
+`PORTHOS_RETRY_DELAY` seconds in between: mirrors are in sync again
+after a while. If all attempts fail, no snapshot is created and the
+`snapshot.service` unit is failed.
 
 ### `sync-head`
 
@@ -357,7 +380,8 @@ when a configured module is updated:
 - `PorthosSnapshotTooOld`, the latest snapshot is old, so clients do not
   receive new updates. Its severity grows with the snapshot age: `info`
   after 1 week, `warning` after 2 weeks, `critical` after 3 weeks. It
-  fires after 1 hour, to leave time to the weekly snapshot run. The
+  fires after 3 hours, to leave time to the weekly snapshot run and its
+  retries. The
   metrics module logs a warning for the `info` severity, as it
   recommends only `warning` and `critical`: the rule works anyway.
 

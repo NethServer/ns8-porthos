@@ -15,5 +15,6 @@ nginx_port, redis_port, _ = (os.environ['TCP_PORTS']).split(",", 2)
 agent.set_env("PORTHOS_NGINX_PORT", nginx_port)
 agent.set_env("PORTHOS_REDIS_PORT", redis_port)
 agent.set_env("PORTHOS_SERVER_NAME", agent.get_hostname())
-agent.set_env("PORTHOS_SOURCE", "rsync://mirror1.hs-esslingen.de")
+agent.set_env("PORTHOS_SOURCE", "rsync://ftp.fau.de/rockylinux/")
+agent.set_env("PORTHOS_CHECK_SOURCES", "") # mirror check disabled
 agent.set_env("PORTHOS_RETENTION", "45")
