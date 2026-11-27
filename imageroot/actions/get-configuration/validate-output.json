@@ -5,7 +5,11 @@
     "description": "Configure porthos",
     "examples": [
         {
-            "source": "rsync://mirror1.hs-esslingen.de",
+            "source": "rsync://ftp.fau.de/rockylinux/",
+            "check_sources": [
+                "rsync://ftp.halifax.rwth-aachen.de/rockylinux/",
+                "rsync://mirror.netzwerge.de/rocky-linux/"
+            ],
             "retention": 30,
             "server_name": "updates.nethserver.org"
         }
@@ -14,7 +18,14 @@
     "properties": {
         "source": {
             "type": "string",
-            "description": "Official upstream rsync mirror base address"
+            "description": "Base rsync:// URL of the Rocky Linux tree, holding the 9/ directory, on an official mirror. The snapshot copies it."
+        },
+        "check_sources": {
+            "type": "array",
+            "description": "Base rsync:// URLs of the Rocky Linux tree on other official mirrors. A snapshot is accepted if one of them has the same contents as source. Empty disables the check.",
+            "items": {
+                "type": "string"
+            }
         },
         "retention": {
             "type": "integer",

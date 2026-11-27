@@ -12,11 +12,34 @@ shopt -s nullglob
 source /etc/nethserver/core.env
 snapshot_retention=${PORTHOS_RETENTION:-45}
 retry_max_attempts=${PORTHOS_RETRY_MAX_ATTEMPTS:-3}
-retry_delay=${PORTHOS_RETRY_DELAY:-60}
+retry_delay=${PORTHOS_RETRY_DELAY:-1800}
 snapshot_dir=tmp.$(date +d%Y%m%dt%H%I%S%2N)
-mirror_base_url=${PORTHOS_SOURCE:?}
-repo_path_list=(/rocky/9/BaseOS/x86_64/os/ /rocky/9/AppStream/x86_64/os/)
-rsync_opts=(-aiSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after)
+# Base URLs of the Rocky Linux tree, the directory holding "9/". The
+# fetch source is copied into the snapshot; the check sources are other
+# mirrors, compared with it to accept the copy. Normalize the trailing
+# slash: rsync needs it to copy directory contents.
+source_url=${PORTHOS_SOURCE:?}
+source_url=${source_url%/}/
+check_url_list=()
+IFS=, read -r -a check_sources <<<"${PORTHOS_CHECK_SOURCES:-}"
+for check_url in "${check_sources[@]}"; do
+    if [[ -n "${check_url}" ]]; then
+        check_url_list+=("${check_url%/}/")
+    fi
+done
+# Repository paths, relative to the base URLs. Locally they are stored
+# under rocky/, the path served to clients.
+repo_path_list=(9/BaseOS/x86_64/os/ 9/AppStream/x86_64/os/)
+local_prefix=rocky/
+# Exclude the staging directory of a mirror caught during its own rsync
+# run with --delay-updates: it is not readable and fails the transfer
+# with code 23. The check against the other mirrors catches an
+# inconsistent copy. Remove the directory if an older snapshot has it.
+rsync_opts=(-aiSH --no-motd --no-super --no-perms --chmod=ugo=rwX --no-g --no-o --delete-after --exclude=.~tmp~/ --delete-excluded)
+# The check is a dry run: it lists the differences between a check
+# mirror and the fetched copy. Directory times depend on when each
+# mirror ran its own sync: ignore them.
+check_opts=("${rsync_opts[@]}" --dry-run --omit-dir-times)
 distfeed_url=https://github.com/NethServer/ns8-repomd/archive/refs/heads/repomd.tar.gz
 
 # Run "$@", retrying on failure up to retry_max_attempts times with a
@@ -41,6 +64,55 @@ retry() {
     done
 }
 
+# Run rsync in a container that mounts the webroot volume. The container
+# name is the first argument.
+run_rsync() {
+    local name=$1
+    shift
+    podman run \
+        --network=host --rm --replace --name="${name}" \
+        --volume=webroot:/srv/porthos/webroot \
+        --workdir=/srv/porthos/webroot \
+        "${RSYNC_IMAGE:?}" \
+        rsync "$@"
+}
+
+# Compare the fetched copy of repo_path with the check mirrors. Succeed
+# when one of them has the same contents. A mirror that cannot be read,
+# for example during its own sync, does not match.
+check_repo() {
+    local repo_path=$1 check_url diff rc
+    if [[ ${#check_url_list[@]} -eq 0 ]]; then
+        return 0
+    fi
+    for check_url in "${check_url_list[@]}"; do
+        printf "Checking %s against %s\n" "${snapshot_dir}/${local_prefix}${repo_path}" "${check_url}${repo_path}"
+        rc=0
+        diff=$(run_rsync take-snapshot-check "${check_opts[@]}" \
+            "${check_url}${repo_path}" "${snapshot_dir}/${local_prefix}${repo_path}") || rc=$?
+        if [[ ${rc} -eq 0 && -z "${diff}" ]]; then
+            printf "Match found with %s\n" "${check_url}${repo_path}"
+            return 0
+        elif [[ ${rc} -ne 0 ]]; then
+            printf "Check failed (exit %d) with %s\n" "${rc}" "${check_url}${repo_path}" >&2
+        else
+            printf "Mismatch with %s, %d difference(s), first ones:\n%s\n" \
+                "${check_url}${repo_path}" "$(wc -l <<<"${diff}")" "$(head -n 10 <<<"${diff}")" >&2
+        fi
+    done
+    printf "No check mirror matches %s\n" "${source_url}${repo_path}" >&2
+    return 1
+}
+
+# Fetch repo_path from the source mirror, then check the copy. A retry
+# runs both again, as the mirrors may be in sync later.
+sync_repo() {
+    local repo_path=$1
+    run_rsync take-snapshot "${rsync_opts[@]}" \
+        "${source_url}${repo_path}" "${snapshot_dir}/${local_prefix}${repo_path}" || return $?
+    check_repo "${repo_path}"
+}
+
 cd $(podman volume inspect webroot | jq -r '.[]
     | if .Options.type == "bind" and (.Options.device? != null)
       then .Options.device
@@ -60,20 +132,15 @@ printf "Fetching distfeed from %s\n" "${distfeed_url}"
 rm -rf "${snapshot_dir}/distfeed"
 mkdir -vp "${snapshot_dir}/distfeed"
 curl --fail -L -O --output-dir "${snapshot_dir}" \
-    --retry "$((retry_max_attempts - 1))" --retry-delay "${retry_delay}" --retry-all-errors \
+    --retry "$((retry_max_attempts - 1))" --retry-delay 60 --retry-all-errors \
     "${distfeed_url}"
 tar -z -x --strip-components=1 -f "${snapshot_dir}/repomd.tar.gz" -C "${snapshot_dir}/distfeed"
 rm -f "${snapshot_dir}/repomd.tar.gz"
 
 for repo_path in "${repo_path_list[@]}"; do
-    printf "Synchronizing %s\n" "${mirror_base_url}${repo_path}"
-    mkdir -vp "${snapshot_dir}${repo_path}"
-    retry podman run \
-        --network=host --rm --replace --name=take-snapshot \
-        --volume=webroot:/srv/porthos/webroot \
-        --workdir=/srv/porthos/webroot \
-        "${RSYNC_IMAGE:?}" \
-        rsync "${rsync_opts[@]}" "${mirror_base_url}${repo_path}" "${snapshot_dir}${repo_path}"
+    printf "Synchronizing %s\n" "${source_url}${repo_path}"
+    mkdir -vp "${snapshot_dir}/${local_prefix}${repo_path}"
+    retry sync_repo "${repo_path}"
     printf "\n"
 done
 

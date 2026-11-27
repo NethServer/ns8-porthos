@@ -14,12 +14,16 @@ request = json.load(sys.stdin)
 
 config = {
     'source': os.environ['PORTHOS_SOURCE'],
+    'check_sources': [url for url in os.environ.get('PORTHOS_CHECK_SOURCES', '').split(',') if url],
     'retention': int(os.environ['PORTHOS_RETENTION']),
     'server_name': os.environ['PORTHOS_SERVER_NAME'],
 }
 
 if 'source' in request:
     agent.set_env("PORTHOS_SOURCE", request['source'])
+
+if 'check_sources' in request:
+    agent.set_env("PORTHOS_CHECK_SOURCES", ",".join(request["check_sources"]))
 
 if 'retention' in request:
     agent.set_env("PORTHOS_RETENTION", request['retention'])
